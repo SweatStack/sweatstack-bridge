@@ -1,0 +1,28 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sweatstack-bridge",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-03",
+  "upload_source_maps": true,
+  "observability": { "enabled": true },
+  "workers_dev": true,
+  "preview_urls": false,
+
+  // Settings that aren't secret. The deploy button shows these as fields; secrets are listed in
+  // .dev.vars.example.
+  "vars": {
+    "SWEATSTACK_URL": "https://app.sweatstack.no",
+    "SWEATSTACK_APP_ID": "",
+    "GARMIN_CLIENT_ID": "",
+    "BACKFILL_DAYS": "90"
+  },
+
+  // No database_id: the first deploy provisions the database and the deploy button records its id.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "sweatstack-bridge",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

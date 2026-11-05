@@ -1,0 +1,9 @@
+node_modules/
+.wrangler/
+.dev.vars
+.env
+.env.*
+!.env.example
+.DS_Store
+# Internal planning notes. They discuss matters that aren't settled in public.
+plans/

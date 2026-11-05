@@ -1,0 +1,3 @@
+# The default rules. Run before each release: `gitleaks git .`
+[extend]
+useDefault = true

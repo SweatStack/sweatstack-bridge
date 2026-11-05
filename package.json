@@ -1,0 +1,49 @@
+{
+  "name": "sweatstack-bridge",
+  "version": "0.0.0",
+  "private": true,
+  "description": "An OpenID Provider that brokers your athletes' Garmin sign-in to SweatStack Sign-In, and a client of SweatStack's public API that relays their data.",
+  "license": "MIT",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "deploy": "node scripts/deploy.mjs",
+    "test": "vitest run",
+    "test:staging": "vitest run --config vitest.staging.config.ts",
+    "typecheck": "tsc"
+  },
+  "cloudflare": {
+    "bindings": {
+      "SWEATSTACK_URL": {
+        "description": "Where SweatStack runs. Leave as is unless you're pointed at staging."
+      },
+      "SWEATSTACK_APP_ID": {
+        "description": "Your app's client id, from the OAuth tab of your app in SweatStack. You can leave this empty for now."
+      },
+      "GARMIN_CLIENT_ID": {
+        "description": "Your client id from Garmin's developer program. You can leave this empty for now."
+      },
+      "BACKFILL_DAYS": {
+        "description": "Days of history to request when an athlete connects. A whole number; 90 is a sensible default."
+      },
+      "SWEATSTACK_CLIENT_SECRET": {
+        "description": "A client secret of your app, from its OAuth tab in SweatStack. Make a separate one for the bridge, so the two rotate independently."
+      },
+      "GARMIN_CLIENT_SECRET": {
+        "description": "Your client secret from Garmin's developer program. Sent to Garmin's token endpoint and nowhere else."
+      }
+    }
+  },
+  "dependencies": {
+    "hono": "^4.13.16",
+    "jose": "^6.2.15"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.5.1",
+    "@cloudflare/workers-types": "^5.20261104.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.157.0"
+  }
+}
