@@ -44,8 +44,8 @@ describe("the documentation", () => {
     expect(missing).toEqual([]);
   });
 
-  it("says nothing about Garmin's agreements or who may use this, and doesn't call itself unfinished", () => {
-    const forbidden = /allow-?list|garmin(?:'s)? (?:license|licence|agreement|terms|contract)|your agreement with garmin|being built|not usable yet|during the beta/i;
+  it("says nothing about Garmin's agreements or who may use this, and doesn't call itself unfinished or the app a SweatStack app", () => {
+    const forbidden = /allow-?list|garmin(?:'s)? (?:license|licence|agreement|terms|contract)|your agreement with garmin|being built|not usable yet|during the beta|sweatstack app/i;
     const everything = { ...pages, "/package.json": JSON.stringify(packageJson) };
     const found = Object.entries(everything).filter(([, text]) => forbidden.test(text)).map(([page, text]) => `${page}: ${text.match(forbidden)?.[0]}`);
     expect(found).toEqual([]);

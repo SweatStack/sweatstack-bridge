@@ -1,6 +1,6 @@
 # SweatStack bridge
 
-**Let athletes sign in to your SweatStack app with Garmin, and get their activities, on your own Garmin keys.**
+**Let athletes sign in with Garmin to your app built on SweatStack, and get their activities, on your own Garmin keys.**
 It's a small service that runs in your own Cloudflare account.
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/SweatStack/sweatstack-bridge)
@@ -12,7 +12,7 @@ Garmin  ──►  Bridge, in your Cloudflare account  ──►  SweatStack  �
 - **Your name:** athletes see your app on Garmin's consent screen.
 - **Your keys:** Garmin keys and athletes' tokens stay in your Cloudflare account. SweatStack never holds them.
 - **Activities and history:** files are relayed as they arrive, with retries, and history is fetched on connecting.
-- **No lock-in:** SweatStack only relies on [a public contract](https://docs.sweatstack.no/learn/applications/self-hosted-integrations/), so you can replace this code with your own.
+- **Reference implementation:** this is SweatStack's reference implementation of [its public contract](https://docs.sweatstack.no/learn/applications/self-hosted-integrations/), [tested against it](DEVELOPING.md#tests). SweatStack relies only on that contract, so you can replace this code with your own.
 
 ## Where to go
 
@@ -33,5 +33,4 @@ This software comes with no guarantees of any kind. Running it is your responsib
 your athletes' tokens and data, and whatever applies to you legally. SweatStack doesn't operate, monitor or update
 your deployment. Read the code and test it before you rely on it.
 
-[MIT licensed](LICENSE): use it for anything, change it and redistribute it. Your use of SweatStack's own service
-stays under your agreement with SweatStack.
+[MIT licensed](LICENSE): use it for anything, change it and redistribute it.
