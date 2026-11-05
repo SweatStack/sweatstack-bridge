@@ -37,10 +37,21 @@ describe("the documentation", () => {
     expect(broken).toEqual([]);
   });
 
-  it("explains every setting in the README", () => {
+  it("explains every setting in the runbook", () => {
     const secrets = [...devVars.matchAll(/^([A-Z_]+)=/gm)].map(([, name]) => name as string);
-    const readme = pages["/README.md"] ?? "";
-    const missing = [...secrets, ...Object.keys(packageJson.cloudflare.bindings)].filter((name) => !readme.includes(`\`${name}\``));
+    const runbook = pages["/RUNBOOK.md"] ?? "";
+    const missing = [...secrets, ...Object.keys(packageJson.cloudflare.bindings)].filter((name) => !runbook.includes(`\`${name}\``));
     expect(missing).toEqual([]);
+  });
+
+  it("says nothing about Garmin's agreements or who may use this, and doesn't call itself unfinished", () => {
+    const forbidden = /allow-?list|garmin(?:'s)? (?:license|licence|agreement|terms|contract)|your agreement with garmin|being built|not usable yet|during the beta/i;
+    const everything = { ...pages, "/package.json": JSON.stringify(packageJson) };
+    const found = Object.entries(everything).filter(([, text]) => forbidden.test(text)).map(([page, text]) => `${page}: ${text.match(forbidden)?.[0]}`);
+    expect(found).toEqual([]);
+  });
+
+  it("keeps the README short: details belong in the runbook and the docs", () => {
+    expect((pages["/README.md"] ?? "").split("\n").length).toBeLessThan(50);
   });
 });

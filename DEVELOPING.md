@@ -138,8 +138,8 @@ SWEATSTACK_URL=... SWEATSTACK_APP_ID=... SWEATSTACK_CLIENT_SECRET=... npm run te
 
 ## Updating a copy
 
-A copy made with the deploy button shares no git history with this repository, so a plain `git merge` doesn't
-work. `npm run update` applies the difference between two releases as a three-way merge, keeping your edits
+[The runbook](RUNBOOK.md#run-it) has the commands. A copy made with the deploy button shares no git history with
+this repository, so a plain `git merge` doesn't work. `npm run update` applies the difference between two releases as a three-way merge, keeping your edits
 and marking real conflicts. Workers Builds then redeploys, and the deploy script applies any new migrations.
 
 ## Release

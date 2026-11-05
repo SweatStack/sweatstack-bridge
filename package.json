@@ -2,7 +2,7 @@
   "name": "sweatstack-bridge",
   "version": "0.0.0",
   "private": true,
-  "description": "An OpenID Provider that brokers your athletes' Garmin sign-in to SweatStack Sign-In, and a client of SweatStack's public API that relays their data.",
+  "description": "Let athletes sign in to your SweatStack app with Garmin, and get their activities, on your own Garmin keys.",
   "license": "MIT",
   "type": "module",
   "engines": { "node": ">=22" },
