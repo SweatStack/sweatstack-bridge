@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security problem
+    url: mailto:security@sweatstack.no
+    about: Please don't report these in public. Write to security@sweatstack.no.
+  - name: A question, or something you need
+    url: mailto:info@sweatstack.no
+    about: We'd like to hear from you. Write to info@sweatstack.no.

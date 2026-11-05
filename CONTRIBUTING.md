@@ -1,46 +1,29 @@
 # Contributing
 
-Issues and pull requests are welcome, with no promise of a reply. See "No guarantees" in the
-[README](README.md).
+Thanks for taking a look! **This repository doesn't accept outside contributions**, so please don't open
+pull requests or feature requests. They'll be closed without review. That's no comment on your work.
 
-## Checks
+SweatStack publishes this code so you can read exactly what runs in your own account, deploy it, and use it
+as a reference for your own integration. We keep it small and maintain it ourselves, so that it stays
+aligned with what SweatStack's platform needs next.
 
-```sh
-npm ci
-npm run typecheck
-npm test
-```
+## What you can do instead
 
-## The rules
+- **Change your own copy.** That's what it's for, and the [license](LICENSE) allows it.
+  [DEVELOPING.md](DEVELOPING.md) shows you how. `npm run update` keeps your edits when you update.
+- **Build your own integration.** SweatStack only depends on
+  [the contract](https://docs.sweatstack.no/learn/integrations/self-hosted/contract/), not on this code.
+- **Tell us what you need.** Using the bridge with SweatStack, or wondering whether it fits your app? We'd
+  like to hear from you at [info@sweatstack.no](mailto:info@sweatstack.no).
+- **Report a bug** by [opening an issue](https://github.com/SweatStack/sweatstack-bridge/issues). We read
+  them, but can't promise a reply or a fix. Never paste a token, a secret or the output of `npm run urls`.
 
-Check every change against these.
+## Security
 
-1. **One code path.** A step is one function. The live path calls it inline for speed, and a job calls it
-   for safety. There is no separate retry logic, and no behaviour that exists only in tests.
-2. **Every step can run twice.** Jobs may repeat, overlap or arrive out of order. They read current state
-   when they run, and the two outside systems dedupe.
-3. **Each fact has one owner.** SweatStack decides who a person is. The platform decides what was granted.
-   D1 holds only what's needed to act, and anything that can be derived or fetched isn't stored.
-4. **No setting for what can be derived.** Each setting is a step in the README and a way to get it wrong.
-5. **Bounded everything.** Every outbound call has a timeout, every run has a budget, every retry has an
-   end, and every table has a purge.
-6. **Secrets stay out of logs and output.** Logging goes through `src/log.ts`. It never receives a token, a
-   platform's file URL or a request URL, because the webhook path holds a secret. Secrets are compared in
-   constant time.
-7. **Migrations only add, and run before the code deploys**, so the running version always works with the
-   next schema.
+Please don't open a public issue for a security problem. Write to
+[security@sweatstack.no](mailto:security@sweatstack.no).
 
-Core code never names a platform. Everything specific to one lives in `src/providers/`, and a test holds
-that.
+## The name
 
-## Tests
-
-- `test/contract/` tests what SweatStack can see. These speak only HTTP: no imports from `src/` beyond
-  building the app, and no reading the database.
-- `test/internal/` tests what SweatStack can't see, such as races, retries and budgets.
-- `test/fake-check/` runs the same calls against the fake SweatStack and against a real one, because the
-  contract tests only prove anything if the fake is right.
-
-`npm run test:staging` runs that last check against a real SweatStack. Set `SWEATSTACK_URL`,
-`SWEATSTACK_APP_ID` and `SWEATSTACK_CLIENT_SECRET` for a test app whose Garmin card is set to Self-hosted.
-Never point it at an app with real users.
+The license covers the code, not the SweatStack name or logo. If you publish a changed copy, make clear that
+it's yours and not an official SweatStack release.

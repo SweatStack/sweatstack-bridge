@@ -4,7 +4,7 @@ declare const process: { env: Record<string, string | undefined> };
 
 const required = (name: string): string => {
   const value = process.env[name];
-  if (!value) throw new Error(`Set ${name}. Use a test app with no real users: see CONTRIBUTING.md.`);
+  if (!value) throw new Error(`Set ${name}. Use a test app with no real users: see DEVELOPING.md.`);
   return value;
 };
 
