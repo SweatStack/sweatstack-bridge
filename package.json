@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "deploy": "node scripts/deploy.mjs",
+    "urls": "node scripts/urls.mjs",
     "test": "vitest run",
     "test:staging": "vitest run --config vitest.staging.config.ts",
     "typecheck": "tsc"

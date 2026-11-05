@@ -10,3 +10,4 @@ authorization code flow, and the connection call. Activity files are relayed, wi
 Connections are looked after: permission changes, deregistration, history, the refresh of a quiet athlete's
 grant, and the removal of a connection nobody claims within a day. A user's token now asks for
 `activities:write` and nothing else. Disconnect is still to come.
+`npm run urls` prints every URL to paste and checks the bridge answers on each one.

@@ -9,21 +9,22 @@ Garmin tells the bridge about new files, changed permissions and removed connect
 Garmin only calls the URLs you've set for your consumer key. Nothing warns you if you haven't, because sign-in
 works without them.
 
-Until `npm run urls` exists, get the secret in the URLs like this. It's a secret, so don't paste it anywhere
-else:
+Run this in your copy:
 
 ```sh
-npx wrangler d1 execute sweatstack-bridge --remote --command "SELECT value FROM meta WHERE key = 'webhook_secret'"
+npm run urls
 ```
 
-Open [Garmin's endpoint configuration](https://apis.garmin.com/tools/endpoints) and sign in with the consumer
-key and secret. Enable these three settings, with `https://your-bridge` being your bridge's address:
+It prints every URL to paste and where it goes, and checks the bridge answers on each one. The webhook URLs hold
+a secret, so keep the output private. It finds your bridge's address through
+Cloudflare. `npm run urls -- --origin https://your-bridge` overrides that.
 
-| Setting | URL |
-|---|---|
-| Activity: Activity Files (ping) | `https://your-bridge/garmin_connect/{secret}/activity-files` |
-| Common: User Permissions Change | `https://your-bridge/garmin_connect/{secret}/user-permissions` |
-| Common: Deregistrations | `https://your-bridge/garmin_connect/{secret}/deregistrations` |
+Open [Garmin's endpoint configuration](https://apis.garmin.com/tools/endpoints) and sign in with the consumer
+key and secret. Enable these three settings, with the URLs from the command:
+
+- Activity: Activity Files (ping)
+- Common: User Permissions Change
+- Common: Deregistrations
 
 Leave every other setting disabled. Garmin allows one URL per setting, so any other server you had on these
 settings stops receiving them.
