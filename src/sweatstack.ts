@@ -128,8 +128,10 @@ export async function uploadActivityFile(
     );
   };
 
+  // A cached token can be out of date both ways: gone bad (401), or minted before the user's grant grew
+  // (403). A new one settles which, and a second refusal is the real answer.
   let response = await attempt();
-  if (response.status === 401) {
+  if (response.status === 401 || response.status === 403) {
     await services.db.deleteSweatstackToken(upload.userId);
     response = await attempt();
   }

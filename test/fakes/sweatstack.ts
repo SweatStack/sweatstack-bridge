@@ -137,6 +137,11 @@ export class FakeSweatStack {
     return "linked";
   }
 
+  /** A sign-in asking for more than the user's grant holds, which grows it. */
+  growGrant(userId: string, scopes: string[]): void {
+    this.grants.set(userId, [...(this.grants.get(userId) ?? []), ...scopes]);
+  }
+
   createUser(fields: Partial<FakeUser>): FakeUser {
     const user: FakeUser = {
       id: this.id("user"),

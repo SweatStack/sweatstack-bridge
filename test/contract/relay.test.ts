@@ -189,6 +189,17 @@ describe("when something fails along the way", () => {
     expect(w.sweatstack.uploads).toEqual([]);
   });
 
+  it("gets a new user token when the user's grant has grown since the cached one was minted", async () => {
+    await setUp({ sweatstack: { defaultScopes: [] } });
+    await w.ping(w.garmin.fileReady(kari, "1001"));
+    expect(w.sweatstack.uploads).toEqual([]);
+
+    const [userId] = w.sweatstack.users.keys();
+    w.sweatstack.growGrant(userId as string, ["activities:write"]);
+    await w.ping(w.garmin.fileReady(kari, "1002"));
+    expect(w.sweatstack.uploads.map((upload) => upload.externalId)).toEqual(["1002"]);
+  });
+
   it("gets a new user token when SweatStack stops accepting the cached one", async () => {
     let refused = false;
     await setUp({
