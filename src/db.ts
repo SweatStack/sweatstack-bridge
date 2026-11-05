@@ -173,7 +173,8 @@ export class Database {
 
   /**
    * Stores a consent. For an account the bridge knows, the new tokens win, and clearing the refresh claim
-   * makes any refresh still in flight unable to write over them. What the consent still needs done goes
+   * makes any refresh still in flight unable to write over them, and the flow's `state` is only kept if
+   * there's still a user to ask for. What the consent still needs done goes
    * in with it, so it can't be lost, and it's due now even if an earlier try was backing off.
    */
   async saveConsent(consent: Consent, followUps: ("permissions_change" | "backfill")[]): Promise<void> {
@@ -183,7 +184,7 @@ export class Database {
            (sub, provider, rp_state, access_token, refresh_token, access_expires_at, refresh_expires_at, permissions, consented_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (sub) DO UPDATE SET
-           rp_state = excluded.rp_state,
+           rp_state = CASE WHEN connections.user_id IS NULL THEN excluded.rp_state END,
            access_token = excluded.access_token,
            refresh_token = excluded.refresh_token,
            access_expires_at = excluded.access_expires_at,
