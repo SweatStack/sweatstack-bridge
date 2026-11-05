@@ -6,7 +6,7 @@ Issues and pull requests are welcome, with no promise of a reply. See "No guaran
 ## Checks
 
 ```sh
-npm install
+npm ci
 npm run typecheck
 npm test
 ```

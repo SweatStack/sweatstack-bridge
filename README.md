@@ -76,7 +76,7 @@ The bridge is two things:
 2. **Clone your copy and log in to Cloudflare:**
 
    ```sh
-   npm install
+   npm ci
    npx wrangler login
    npm run status   # what's still missing; no secrets, safe to share
    npm run urls     # every URL you need to paste; includes a secret, so keep it private
@@ -132,7 +132,7 @@ You can also watch this repository on GitHub (Watch, Custom, Releases).
 ## Run it locally
 
 ```sh
-npm install
+npm ci
 cp .dev.vars.example .dev.vars   # fill in your keys
 npm run dev         # local D1, against the real Garmin and SweatStack
 npm test            # the full suite, in the Workers runtime, needs no keys
