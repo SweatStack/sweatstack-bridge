@@ -14,7 +14,7 @@
     "urls": "node scripts/urls.mjs",
     "test": "vitest run",
     "test:staging": "vitest run --config vitest.staging.config.ts",
-    "test:scripts": "node --test scripts/test-update.mjs",
+    "test:scripts": "node --test scripts/test-scripts.mjs",
     "typecheck": "tsc"
   },
   "cloudflare": {

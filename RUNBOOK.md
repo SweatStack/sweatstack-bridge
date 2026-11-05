@@ -68,7 +68,7 @@ When an athlete disconnects, SweatStack waits five seconds for the answer. If Ga
 
 ## Try a sign-in again
 
-Add `prompt=login` to your authorize URL when you test. If the browser is already signed in to your app,
+Add `integration=garmin_connect&prompt=login` to your authorize URL when you test. If the browser is already signed in to your app,
 SweatStack answers an authorize request at once and never asks Garmin or the bridge. That is correct for an
 athlete and easy to mistake for a fault in a test. A private window doesn't help if another private window is
 still open, because they share their cookies. With `prompt=login`, SweatStack shows its sign-in page instead:

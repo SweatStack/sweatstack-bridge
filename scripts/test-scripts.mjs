@@ -1,11 +1,12 @@
-// `npm run update` and the release notes on real git repositories, in a temporary directory. They run under
-// Node rather than Vitest, which runs in the Workers runtime and can't start git.
+// What can't run under Vitest, which runs in the Workers runtime: `npm run update` and the release notes on
+// real git repositories in a temporary directory, and what needs wrangler.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
+import { customDomain, findOrigin } from "./lib/cloudflare.mjs";
 
 const UPDATE = resolve(import.meta.dirname, "update.mjs");
 const RELEASE_NOTES = resolve(import.meta.dirname, "release-notes.mjs");
@@ -183,4 +184,17 @@ test("release notes refuse a tag package.json doesn't agree with, or a release w
   release("0.2.0", { "CHANGELOG.md": CHANGELOG("0.1.0") });
   assert.match(notes("v0.3.0").stderr, /package\.json says 0\.2\.0/);
   assert.match(notes("v0.2.0").stderr, /no section for 0\.2\.0/);
+});
+
+test("finds a custom domain, and ignores a route that isn't one", () => {
+  assert.equal(customDomain(undefined), null);
+  assert.equal(customDomain(["example.com/*", { pattern: "zone.example/*", zone_name: "zone.example" }]), null);
+  assert.equal(customDomain([{ pattern: "bridge.example", custom_domain: true }]), "https://bridge.example");
+});
+
+test("takes the owner's address first, then the custom domain, and only asks for https", async () => {
+  const config = { routes: [{ pattern: "bridge.example", custom_domain: true }] };
+  assert.equal(await findOrigin(config, ["node", "x", "--origin", "https://mine.example/"]), "https://mine.example");
+  assert.equal(await findOrigin(config, ["node", "x"]), "https://bridge.example");
+  await assert.rejects(findOrigin(config, ["node", "x", "--origin", "http://mine.example"]), /https/);
 });

@@ -37,7 +37,7 @@ Bridge 0.1 covers activities and activity history.
 
 ## Deploy
 
-1. **Click the deploy button.** Leave anything you don't have yet empty, and set it in steps 3 and 4.
+1. **Click the deploy button.** Leave anything you don't have yet empty, and set it in steps 3 to 5.
 2. **Clone your copy, then:**
 
    ```sh
@@ -48,11 +48,13 @@ Bridge 0.1 covers activities and activity history.
    ```
 
 3. **In SweatStack's OAuth tab:** create a client secret. Then run `npx wrangler secret put SWEATSTACK_APP_ID`, and the same for `SWEATSTACK_CLIENT_SECRET`.
-4. **In Garmin's developer tools:** paste the URLs from `npm run urls`, in the [settings the runbook lists](RUNBOOK.md#set-up-garmins-notifications). Without them sign-in works, but no files arrive. Then set `GARMIN_CLIENT_ID` and `GARMIN_CLIENT_SECRET` the same way, and set `GARMIN_APP_OFFERS` in `wrangler.jsonc` to what your Garmin app is approved for.
-5. **In SweatStack's Data sources tab:** choose "Self-hosted" on the Garmin card and paste the issuer URL.
-6. **Test in a private window.**
+4. **In Garmin's developer tools:** paste the URLs from `npm run urls`, in the [settings the runbook lists](RUNBOOK.md#set-up-garmins-notifications). Without them sign-in works, but no files arrive. Then set `GARMIN_CLIENT_ID` and `GARMIN_CLIENT_SECRET` the same way.
+5. **In `wrangler.jsonc`:** set `GARMIN_APP_OFFERS` to what your Garmin app is approved for, then commit and push.
+6. **In SweatStack's Data sources tab:** choose "Self-hosted" on the Garmin card and paste the issuer URL.
+7. **Run `npm run status`,** then [try a sign-in](RUNBOOK.md#try-a-sign-in-again) in a private window.
 
-> **Choose your domain before athletes connect.** Moving it later means repeating steps 4 and 5.
+> **Choose your domain before athletes connect.** Moving it later means repeating steps 4 and 6. To use your
+> own, add `"routes": [{ "pattern": "garmin.example.com", "custom_domain": true }]` to `wrangler.jsonc`.
 >
 > **Don't delete the D1 database.** Without it, every athlete has to connect again and comes back as a new
 > user. `npx wrangler d1 export` makes a backup. The file holds their tokens, so keep it safe.

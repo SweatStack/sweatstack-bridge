@@ -2,10 +2,6 @@
 
 How the bridge works, and how to run and change it. Start here if you're changing your own copy.
 
-**Being built.** This describes the code as it's intended to be, and some of it doesn't exist yet. So far
-there's the OpenID Provider, the sign-in, relaying activity files and looking after a connection. Disconnect
-and the owner's commands come next.
-
 ## How it works
 
 The bridge is two things that share only a user id:
@@ -40,6 +36,11 @@ is retried after 1, 2 and 4 seconds on a job's first run, and after that with th
 signal for "finished", and files keep arriving afterwards. If it accepted none, the connection stays `syncing`,
 which SweatStack ends after 24 hours, and the next consent or permission change asks again.
 
+**Ending a connection** has three ways in, and all three delete the row and its jobs and add a `declare`, whose
+`DELETE` is what SweatStack hears last. The platform's webhook is one, and a day with no user is another.
+SweatStack's signed disconnect is the third: it comes from the Portal or for a deleted user, and the bridge deregisters at
+the platform first, answering `503` and keeping the row if the platform can't be reached, so "try again" is true.
+
 [The contract](https://docs.sweatstack.no/learn/applications/self-hosted-integrations/) is the whole of what
 SweatStack expects from it.
 
@@ -58,10 +59,10 @@ src/
   connections.ts      What a connection provides, whose it is, and its access token
   inbox/              The job queue, what runs the jobs, and the cron
   oidc/               The OpenID Provider: discovery, keys, registration, authorize, token
-  flows/              The platform's redirect and webhooks, SweatStack's signed disconnect, and what follows a consent
+  flows/              The platform's redirect and webhooks, SweatStack's signed disconnect, what follows a consent
   providers/          Everything specific to one platform
 migrations/           The D1 schema
-scripts/              deploy, dev, and what they share
+scripts/              The owner's commands: deploy, dev, status, urls, update. Also the release notes
 test/
   contract/           What SweatStack can see, over HTTP only
   internal/           What it can't see: races, retries, budgets
@@ -80,6 +81,7 @@ npm ci
 cp .dev.vars.example .dev.vars   # fill in your keys
 npm run dev                      # a local database, against the real services
 npm test                         # needs no keys
+npm run test:scripts             # the commands that can't run in the Workers runtime; needs git
 npm run typecheck
 ```
 
@@ -126,8 +128,8 @@ never needs to.
 - **`test/fake-check/`** runs the same calls against the fake SweatStack and a real one, because the contract
   tests only prove the bridge matches the fake.
 
-To run that last one against a real SweatStack, use a test app with no real users, with the
-`activities:write` scope and its Garmin card set to Self-hosted. Each run deletes and recreates one test user,
+To run that last one against a real SweatStack, use a test app with no real users, with write ticked for
+Activities and its Garmin card set to Self-hosted. Each run deletes and recreates one test user,
 found by the reference `bridge-fake-check`:
 
 ```sh
