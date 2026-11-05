@@ -6,8 +6,8 @@ import { beforeAll, describe, expect, it } from "vitest";
  * prove the bridge matches the fake. Covers what's released: the client credentials grant,
  * the management API, declared connections and the upload relay.
  *
- * Safe to repeat against a real test app: it finds one user by its reference, and keeps sending one
- * file under one id.
+ * Safe to repeat against a real test app: it replaces its one test user, found by its reference, at
+ * the start of each run. A user keeps the scopes it was created with, so a kept one could go stale.
  */
 export interface Target {
   url: string;
@@ -25,6 +25,12 @@ async function setup<T>(what: string, response: Response): Promise<T> {
   const body = await response.text();
   if (!response.ok) throw new Error(`Couldn't get ${what}: ${response.status} ${body.slice(0, 500)}`);
   return JSON.parse(body) as T;
+}
+
+/** Checks the status, and on a mismatch fails with what the server said, which is usually the reason. */
+async function expectStatus(response: Response, status: number): Promise<void> {
+  if (response.status === status) return;
+  expect(`${response.status} ${(await response.text()).slice(0, 500)}`).toBe(String(status));
 }
 
 export function checks(name: string, target: () => Target): void {
@@ -64,6 +70,9 @@ export function checks(name: string, target: () => Target): void {
     beforeAll(async () => {
       t = target();
       ({ access_token: clientToken } = await setup<{ access_token: string }>("a client token", await clientTokenRequest(t.clientSecret)));
+      const { id: previous } = await setup<{ id: string }>("the test user", await createUser());
+      const deleted = await t.fetch(`${users()}/${previous}`, { method: "DELETE", headers: bearer(clientToken) });
+      if (!deleted.ok) throw new Error(`Couldn't replace the test user: ${deleted.status}`);
       ({ id: userId } = await setup<{ id: string }>("the test user", await createUser()));
       ({ access_token: userToken } = await setup<{ access_token: string }>(
         "a token for the test user",
@@ -79,7 +88,7 @@ export function checks(name: string, target: () => Target): void {
 
     it("gives a client token with no refresh token", async () => {
       const response = await clientTokenRequest(t.clientSecret);
-      expect(response.status).toBe(200);
+      await expectStatus(response, 200);
       const body = (await response.json()) as Record<string, unknown>;
       expect(body).toMatchObject({ token_type: "Bearer", access_token: expect.any(String), expires_in: expect.any(Number) });
       expect(body.refresh_token ?? null).toBeNull();
@@ -87,13 +96,13 @@ export function checks(name: string, target: () => Target): void {
 
     it("finds a user by its reference, without a first name", async () => {
       const response = await createUser();
-      expect(response.status).toBe(200);
+      await expectStatus(response, 200);
       expect(await response.json()).toMatchObject({ id: userId, external_reference: REFERENCE });
     });
 
     it("mints a user's token with no refresh token", async () => {
       const response = await t.fetch(`${users()}/${userId}/token`, { method: "POST", headers: bearer(clientToken) });
-      expect(response.status).toBe(200);
+      await expectStatus(response, 200);
       const body = (await response.json()) as Record<string, unknown>;
       expect(body).toMatchObject({ access_token: expect.any(String), expires_in: expect.any(Number) });
       expect(body.refresh_token ?? null).toBeNull();
@@ -120,7 +129,7 @@ export function checks(name: string, target: () => Target): void {
         headers: bearer(clientToken, { "Content-Type": "application/json" }),
         body: JSON.stringify({ capabilities: ALL_UNAVAILABLE }),
       });
-      expect(declared.status).toBe(200);
+      await expectStatus(declared, 200);
       expect(await declared.json()).toMatchObject({
         provider: PROVIDER,
         capabilities: ALL_UNAVAILABLE,
@@ -129,7 +138,7 @@ export function checks(name: string, target: () => Target): void {
 
       for (let attempt = 0; attempt < 2; attempt += 1) {
         const removed = await t.fetch(connection(), { method: "DELETE", headers: bearer(clientToken) });
-        expect(removed.status).toBe(204);
+        await expectStatus(removed, 204);
       }
     });
 
@@ -144,7 +153,7 @@ export function checks(name: string, target: () => Target): void {
 
     it("takes a relayed file as a source, and the same id is the same source", async () => {
       const first = await upload(userToken);
-      expect(first.status).toBe(202);
+      await expectStatus(first, 202);
       const { sources } = (await first.json()) as { sources: { id: string; status: string }[] };
       expect(sources).toHaveLength(1);
       expect(sources[0]?.id).toEqual(expect.any(String));

@@ -30,7 +30,7 @@ Bridge 0.1 covers activities and activity history.
 
 ## Before you start
 
-- [ ] A [live SweatStack app](https://docs.sweatstack.no/learn/applications/going-live/) with the `activities:write` scope
+- [ ] A [live SweatStack app](https://docs.sweatstack.no/learn/applications/going-live/) with the `activities:write` scope. Set it before your first user: a user keeps the scopes they were created with, and SweatStack refuses every file for a user without it
 - [ ] [Keys from Garmin's developer program](https://docs.sweatstack.no/learn/integrations/garmin/). Request them early: it's the one step whose timing you don't control
 - [ ] A Cloudflare account. The free plan covers a small app, and USD 5 a month removes its limits
 - [ ] You've read [what changes for your users](https://docs.sweatstack.no/learn/integrations/self-hosted/#your-users). In short: your sign-in page loses its email field, and one person can end up as two users. **Never merge users by email.**

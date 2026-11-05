@@ -92,8 +92,9 @@ The design assumes Cloudflare's free plan: 10 ms of CPU per request or run, and 
 - **`test/fake-check/`** runs the same calls against the fake SweatStack and a real one, because the contract
   tests only prove the bridge matches the fake.
 
-To run that last one against a real SweatStack, use a test app with no real users, with its Garmin card set
-to Self-hosted:
+To run that last one against a real SweatStack, use a test app with no real users, with the
+`activities:write` scope and its Garmin card set to Self-hosted. Each run deletes and recreates one test user,
+found by the reference `bridge-fake-check`:
 
 ```sh
 SWEATSTACK_URL=... SWEATSTACK_APP_ID=... SWEATSTACK_CLIENT_SECRET=... npm run test:staging

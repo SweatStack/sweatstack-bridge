@@ -85,6 +85,46 @@ describe("the fake's federation", () => {
   });
 });
 
+describe("the fake's scopes", () => {
+  const relay = async (fake: FakeSweatStack, userId: string) => {
+    const basic = `Basic ${btoa(`${fake.appId}:${fake.clientSecret}`)}`;
+    const client = await fake.fetch(
+      new Request(`${fake.url}/api/v1/oauth/token`, {
+        method: "POST",
+        headers: { Authorization: basic },
+        body: new URLSearchParams({ grant_type: "client_credentials" }),
+      }),
+    );
+    const { access_token: clientToken } = (await client.json()) as { access_token: string };
+    const mint = await fake.fetch(
+      new Request(`${fake.url}/api/v1/applications/${fake.appId}/users/${userId}/token`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${clientToken}` },
+      }),
+    );
+    const { access_token: userToken } = (await mint.json()) as { access_token: string };
+    const form = new FormData();
+    form.append("files", new File([new Uint8Array([0])], "a.fit"));
+    return fake.fetch(
+      new Request(`${fake.url}/api/v1/activities/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${userToken}` },
+        body: form,
+      }),
+    );
+  };
+
+  it("refuses a relay without activities:write, and a user keeps the scopes it was created with", async () => {
+    const fake = new FakeSweatStack({ defaultScopes: [] });
+    const early = fake.createUser({});
+    expect((await relay(fake, early.id)).status).toBe(403);
+
+    fake.defaultScopes = ["activities:write"];
+    expect((await relay(fake, early.id)).status).toBe(403);
+    expect((await relay(fake, fake.createUser({}).id)).status).toBe(202);
+  });
+});
+
 describe("the fake's signed tokens", () => {
   const verify = async (fake: FakeSweatStack, token: string, typ: string) => {
     const jwks = createRemoteJWKSet(new URL(`${fake.url}/.well-known/jwks.json`), {

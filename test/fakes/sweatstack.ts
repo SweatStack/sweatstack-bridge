@@ -13,12 +13,15 @@ export interface FakeSweatStackOptions {
   clientSecret?: string;
   /** Whether the platform is set to Self-hosted on the app's Data sources tab. */
   selfHosted?: boolean;
+  /** The app's default scopes. A new user gets a copy, and keeps it when the app's change later. */
+  defaultScopes?: string[];
 }
 
 interface Issued {
   /** The app for a client token, the user for a user's token. */
   sub: string;
   client: boolean;
+  scopes: string[];
 }
 
 interface FakeUser {
@@ -56,6 +59,7 @@ export class FakeSweatStack {
   readonly appId: string;
   readonly clientSecret: string;
   selfHosted: boolean;
+  defaultScopes: string[];
 
   /** Everything sent to it, in order, for a test to assert on. */
   readonly calls: { method: string; path: string }[] = [];
@@ -70,6 +74,7 @@ export class FakeSweatStack {
 
   private readonly app = new Hono();
   private readonly tokens = new Map<string, Issued>();
+  private readonly grants = new Map<string, string[]>();
   private readonly flows = new Map<string, StartedBy>();
   private readonly sources = new Map<string, string>();
   private signingKey?: Promise<{ privateKey: CryptoKey; publicJwk: JWK }>;
@@ -80,11 +85,13 @@ export class FakeSweatStack {
     appId = "test-app",
     clientSecret = "test-client-secret",
     selfHosted = true,
+    defaultScopes = ["activities:write"],
   }: FakeSweatStackOptions = {}) {
     this.url = url;
     this.appId = appId;
     this.clientSecret = clientSecret;
     this.selfHosted = selfHosted;
+    this.defaultScopes = defaultScopes;
     this.routes();
   }
 
@@ -129,6 +136,7 @@ export class FakeSweatStack {
       registered_at: new Date(0).toISOString(),
     };
     this.users.set(user.id, user);
+    this.grants.set(user.id, [...this.defaultScopes]);
     return user;
   }
 
@@ -181,7 +189,7 @@ export class FakeSweatStack {
       if (clientId !== this.appId || clientSecret !== this.clientSecret) {
         return c.json({ error: "invalid_client", error_description: "Invalid client credentials" }, 401);
       }
-      return c.json(this.issue({ sub: this.appId, client: true }));
+      return c.json(this.issue({ sub: this.appId, client: true, scopes: [] }));
     });
 
     const users = "/api/v1/applications/:app/users";
@@ -202,7 +210,14 @@ export class FakeSweatStack {
       if (refused) return refused;
       const user = this.users.get(c.req.param("user"));
       if (!user) return c.json(NOT_FOUND, 404);
-      return c.json(this.issue({ sub: user.id, client: false }));
+      return c.json(this.issue({ sub: user.id, client: false, scopes: this.grants.get(user.id) ?? [] }));
+    });
+
+    app.delete(`${users}/:user`, (c) => {
+      const refused = this.refuseUnlessClient(c);
+      if (refused) return refused;
+      if (!this.users.delete(c.req.param("user"))) return c.json(NOT_FOUND, 404);
+      return c.body(null, 204);
     });
 
     app.put(`${users}/:user/connections/:provider`, async (c) => {
@@ -270,6 +285,9 @@ export class FakeSweatStack {
       const issued = this.bearer(c);
       if (!issued) return c.json({ detail: "No or invalid token provided" }, 401);
       if (issued.client) return c.json({ detail: "A client token can't be used here." }, 403);
+      if (!issued.scopes.includes("activities:write")) {
+        return c.json({ detail: `Insufficient scopes: ${JSON.stringify(issued.scopes)} does not contain activities:write.` }, 403);
+      }
       const form = await c.req.formData();
       const files = form.getAll("files").filter((file): file is File => file instanceof File);
       if (files.length === 0 || files.length > MAX_FILES) return c.json({ detail: "Send 1 to 10 files." }, 400);
