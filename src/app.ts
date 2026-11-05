@@ -3,6 +3,7 @@ import { readConfig } from "./config";
 import type { PlatformVariables } from "./context";
 import { Database } from "./db";
 import type { Deps } from "./deps";
+import { disconnect } from "./flows/disconnect";
 import { platformCallback } from "./flows/platform-callback";
 import { webhook } from "./flows/webhook";
 import { log } from "./log";
@@ -27,6 +28,7 @@ export function createApp(deps: Deps): Hono {
   platform.post("/oidc/:provider/token", token);
   platform.get("/oidc/:provider/jwks", jwks);
   platform.post("/oidc/:provider/register", register);
+  platform.post("/oidc/:provider/disconnect", disconnect);
   platform.get("/callback/:provider", platformCallback);
   platform.post("/:provider/:secret/:kind", webhook);
 

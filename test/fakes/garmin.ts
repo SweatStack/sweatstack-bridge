@@ -56,6 +56,8 @@ export class FakeGarmin {
   readonly backfills: { userId: string; start: number; end: number }[] = [];
   /** Every backfill request that reached Garmin, whatever the answer. */
   readonly backfillRequests: { start: number; end: number }[] = [];
+  /** Runs just before a deregistration is answered, for a test of what happens meanwhile. */
+  beforeDeregistering: () => Promise<void> = async () => {};
   /** Accounts deregistered through `DELETE .../user/registration`. */
   readonly deregistered: string[] = [];
   /** While set, backfill requests wait for it: a test's way of holding Garmin up. */
@@ -230,7 +232,8 @@ export class FakeGarmin {
   }
 
   private registrationRoute(): void {
-    this.app.delete("/partner-gateway/rest/user/registration", (c) => {
+    this.app.delete("/partner-gateway/rest/user/registration", async (c) => {
+      await this.beforeDeregistering();
       const failure = this.failures.registration.shift();
       if (failure !== undefined) return c.body(null, failure as 500);
       const header = c.req.header("Authorization") ?? "";

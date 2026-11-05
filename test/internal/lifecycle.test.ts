@@ -412,3 +412,55 @@ describe("refreshing a quiet grant", () => {
     expect(await jobs(sub)).not.toContainEqual(expect.objectContaining({ kind: "refresh_grant" }));
   });
 });
+
+describe("a disconnect, against what happens meanwhile", () => {
+  let w: ReturnType<typeof world>;
+  let client: Client;
+
+  beforeEach(async () => {
+    await resetDatabase({ withSigningKey: true });
+    w = world();
+    client = await w.register();
+  });
+
+  const connected = async () => {
+    const { sub } = await w.signIn(client, kari);
+    await w.settled();
+    return { sub, userId: w.sweatstack.connections.get(sub)?.userId as string };
+  };
+
+  it("keeps a consent that landed while Garmin was being asked", async () => {
+    const { sub, userId } = await connected();
+    w.clock.now += 10;
+    w.garmin.beforeDeregistering = async () => {
+      w.garmin.beforeDeregistering = async () => {};
+      w.clock.now += 10;
+      await w.signIn(client, kari);
+    };
+    expect((await w.disconnect(sub, userId)).status).toBe(204);
+    expect(await db.connection(sub)).not.toBeNull();
+  });
+
+  it("lets only one of two identical requests through", async () => {
+    const { sub, userId } = await connected();
+    const answers = await Promise.all([w.disconnect(sub, userId, { jti: "same" }), w.disconnect(sub, userId, { jti: "same" })]);
+    expect(answers.map((answer) => answer.status).sort()).toEqual([204, 400]);
+    expect(w.garmin.deregistered).toEqual([kari.userId]);
+  });
+
+  it("stores no jti for a request that didn't verify, so nobody can fill the table", async () => {
+    const { sub, userId } = await connected();
+    await w.disconnect(sub, userId, { typ: "JWT", jti: "forged" });
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM seen_jtis").first("count")).toBe(0);
+  });
+
+  it("forgets a jti after a day, long after its five minutes are over", async () => {
+    const { sub, userId } = await connected();
+    await w.disconnect(sub, userId, { jti: "old" });
+    await w.cron();
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM seen_jtis").first("count")).toBe(1);
+    w.clock.now += 24 * 60 * 60;
+    await w.cron();
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM seen_jtis").first("count")).toBe(0);
+  });
+});

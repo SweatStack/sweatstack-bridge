@@ -8,6 +8,7 @@ export function discovery(c: PlatformContext): Response {
     token_endpoint: `${issuer}/token`,
     jwks_uri: `${issuer}/jwks`,
     registration_endpoint: `${issuer}/register`,
+    sweatstack_disconnect_endpoint: `${issuer}/disconnect`,
     scopes_supported: ["openid"],
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code"],

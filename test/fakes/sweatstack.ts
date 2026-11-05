@@ -58,6 +58,25 @@ const TOKEN_LIFETIME_SECONDS = 900;
 const MAX_FILES = 10;
 const NOT_FOUND = { detail: "Not found." };
 
+export interface DisconnectEvent {
+  issuer: string;
+  userId: string;
+  /** Null for a connection SweatStack holds no subject for. */
+  subject: string | null;
+  provider: string;
+  tamper?: {
+    key?: CryptoKey;
+    typ?: string;
+    iss?: string;
+    aud?: string;
+    iat?: number;
+    /** A value to send the same one twice, or null to leave it out. */
+    jti?: string | null;
+    subjectIssuer?: string;
+    events?: unknown;
+  };
+}
+
 export class FakeSweatStack {
   readonly url: string;
   readonly appId: string;
@@ -186,24 +205,23 @@ export class FakeSweatStack {
       .sign(privateKey);
   }
 
-  /** The signed disconnect request, the same shape as SweatStack's. */
-  async disconnectEvent({ issuer, userId, subject, provider }: { issuer: string; userId: string; subject: string; provider: string }): Promise<string> {
+  /**
+   * The signed disconnect request, the same shape as SweatStack's. `tamper` changes
+   * what's signed, for a test of what the bridge refuses.
+   */
+  async disconnectEvent({ issuer, userId, subject, provider, tamper = {} }: DisconnectEvent): Promise<string> {
     const { privateKey, publicJwk } = await this.key();
-    return new SignJWT({
-      events: {
-        "https://sweatstack.no/events/connection-disconnect": {
-          provider,
-          subject: { format: "iss_sub", iss: issuer, sub: subject },
-        },
-      },
-    })
-      .setProtectedHeader({ alg: "RS256", typ: "secevent+jwt", kid: publicJwk.kid })
-      .setIssuer(this.url)
-      .setAudience(issuer)
+    const signingKey = tamper.key ?? privateKey;
+    const named = subject === null ? {} : { subject: { format: "iss_sub", iss: tamper.subjectIssuer ?? issuer, sub: subject } };
+    const events = tamper.events ?? { "https://sweatstack.no/events/connection-disconnect": { provider, ...named } };
+    const token = new SignJWT({ events })
+      .setProtectedHeader({ alg: "RS256", typ: tamper.typ ?? "secevent+jwt", kid: publicJwk.kid })
+      .setIssuer(tamper.iss ?? this.url)
+      .setAudience(tamper.aud ?? issuer)
       .setSubject(userId)
-      .setJti(this.id("jti"))
-      .setIssuedAt(this.now())
-      .sign(privateKey);
+      .setIssuedAt(tamper.iat ?? this.now());
+    if (tamper.jti !== null) token.setJti(tamper.jti ?? this.id("jti"));
+    return token.sign(signingKey);
   }
 
   private routes(): void {

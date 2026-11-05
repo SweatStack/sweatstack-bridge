@@ -376,5 +376,36 @@ describe("who the result belongs to", () => {
       expect(w.sleeps).toEqual([]);
       expect(w.sweatstack.connections.get(first.sub)?.userId).toBe(userId);
     });
+
+    /** Contract: "If the `sub` belongs to another user of your app, SweatStack refuses and nothing changes." */
+    it("stays with its user when another user's Portal brings the same Garmin account", async () => {
+      const first = await w.signIn(client, kari);
+      const owner = w.sweatstack.connections.get(first.sub)?.userId;
+      await w.settled();
+      const other = w.sweatstack.createUser({});
+
+      const flow = await w.signIn(client, kari, { startedBy: other.id });
+      expect(w.sweatstack.browserReturns(flow.state, flow.sub, { session: other.id })).toBe("refused");
+      await w.settled();
+      expect(flow.sub).toBe(first.sub);
+      expect(w.sweatstack.connections.get(first.sub)?.userId).toBe(owner);
+    });
+
+    /** Contract: "If the user had a different platform account connected, SweatStack first sends your disconnect endpoint a request for the old one." */
+    it("ends the old account first when a user connects a different one", async () => {
+      const first = await w.signIn(client, kari);
+      const userId = w.sweatstack.connections.get(first.sub)?.userId as string;
+      await w.settled();
+
+      const flow = await w.signIn(client, lars, { startedBy: userId });
+      expect((await w.disconnect(first.sub, userId)).status).toBe(204);
+      expect(w.garmin.deregistered).toEqual([kari.userId]);
+      expect(w.sweatstack.browserReturns(flow.state, flow.sub, { session: userId })).toBe("linked");
+      await w.settled();
+      await w.cron();
+
+      expect(w.sweatstack.connections.get(flow.sub)?.userId).toBe(userId);
+      expect(w.sweatstack.connections.has(first.sub)).toBe(false);
+    });
   });
 });

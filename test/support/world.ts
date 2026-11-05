@@ -6,7 +6,7 @@ import type { Env } from "../../src/config";
 import type { Deps } from "../../src/deps";
 import { sweep } from "../../src/inbox/sweeper";
 import { FakeGarmin, GARMIN_HOSTS, type Account } from "../fakes/garmin";
-import { FakeSweatStack, type FakeSweatStackOptions } from "../fakes/sweatstack";
+import { FakeSweatStack, type DisconnectEvent, type FakeSweatStackOptions } from "../fakes/sweatstack";
 import { network, type Handler } from "./network";
 
 export const ORIGIN = "https://bridge.test";
@@ -28,7 +28,7 @@ export async function setSigningKey(present: boolean): Promise<void> {
 
 /** A clean slate, with the secrets the first migration made left in place. */
 export async function resetDatabase({ withSigningKey }: { withSigningKey: boolean }): Promise<void> {
-  await env.DB.batch(["clients", "flows", "connections", "tokens", "inbox"].map((table) => env.DB.prepare(`DELETE FROM ${table}`)));
+  await env.DB.batch(["clients", "flows", "connections", "tokens", "inbox", "seen_jtis"].map((table) => env.DB.prepare(`DELETE FROM ${table}`)));
   await setSigningKey(withSigningKey);
 }
 
@@ -164,6 +164,14 @@ export function world({ sweatstack: sweatstackOptions, settings: extraSettings, 
     return response;
   };
 
+  /** SweatStack asking the bridge to end a connection, as its Portal and a deleted user do. */
+  const disconnect = async (subject: string | null, userId: string, tamper?: DisconnectEvent["tamper"]) =>
+    request(`/oidc/${PROVIDER}/disconnect`, {
+      method: "POST",
+      headers: { "Content-Type": "application/secevent+jwt" },
+      body: await sweatstack.disconnectEvent({ issuer: ISSUER, userId, subject, provider: PROVIDER, tamper }),
+    });
+
   /** One run of the cron. */
   const cron = async () => {
     await sweep(deps);
@@ -214,7 +222,7 @@ export function world({ sweatstack: sweatstackOptions, settings: extraSettings, 
     return { ...flow, claims, sub: claims.sub as string };
   };
 
-  return { sweatstack, garmin, clock, hooks, sleeps, foreignCalls, webhook, ping, notify, cron, request, discoveryPath, postRegistration, register, authorize, exchange, consent, signIn, settled, verifyIdToken };
+  return { sweatstack, garmin, clock, hooks, sleeps, foreignCalls, webhook, ping, notify, disconnect, cron, request, discoveryPath, postRegistration, register, authorize, exchange, consent, signIn, settled, verifyIdToken };
 }
 
 export function pathOf(url: string): string {

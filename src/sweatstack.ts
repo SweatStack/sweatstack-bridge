@@ -1,3 +1,4 @@
+import { createRemoteJWKSet, customFetch } from "jose";
 import type { Config } from "./config";
 import type { Database } from "./db";
 import type { Deps } from "./deps";
@@ -13,10 +14,21 @@ const TOKEN_EXPIRY_MARGIN_SECONDS = 30;
 
 const CLIENT_TOKEN_HOLDER = "client";
 
+/** SweatStack waits five seconds for whoever it signs a request to, so reading its keys has to take less. */
+const KEYS_TIMEOUT_MS = 3_000;
+
 export interface SweatStackServices {
   config: Config;
   db: Database;
   deps: Pick<Deps, "fetch" | "now">;
+}
+
+/** The keys behind everything SweatStack signs. */
+export function sweatstackKeys(config: Config, deps: Pick<Deps, "fetch">) {
+  return createRemoteJWKSet(new URL(`${config.sweatstackUrl}/.well-known/jwks.json`), {
+    [customFetch]: outbound(deps, KEYS_TIMEOUT_MS),
+    timeoutDuration: KEYS_TIMEOUT_MS,
+  });
 }
 
 /** A call to SweatStack failed. The status is absent when it never answered. */

@@ -1,13 +1,10 @@
-import { createRemoteJWKSet, customFetch, jwtVerify } from "jose";
+import { jwtVerify } from "jose";
 import { NO_STORE, sweatstackRedirectUri, type PlatformContext } from "../context";
 import { hashSecret, randomToken } from "../crypto";
-import { outbound } from "../http";
 import { log } from "../log";
+import { sweatstackKeys } from "../sweatstack";
 
 const SOFTWARE_STATEMENT_TYP = "software-statement+jwt";
-
-/** SweatStack waits five seconds for the whole registration, so reading its keys has to take less. */
-const KEYS_TIMEOUT_MS = 3_000;
 
 /**
  * RFC 7591, with a software statement required: anyone who could register a client could send people
@@ -23,14 +20,10 @@ export async function register(c: PlatformContext): Promise<Response> {
   }
 
   const redirectUri = sweatstackRedirectUri(config, provider);
-  const keys = createRemoteJWKSet(new URL(`${config.sweatstackUrl}/.well-known/jwks.json`), {
-    [customFetch]: outbound(deps, KEYS_TIMEOUT_MS),
-    timeoutDuration: KEYS_TIMEOUT_MS,
-  });
 
   let payload: Record<string, unknown>;
   try {
-    ({ payload } = await jwtVerify(body.software_statement, keys, {
+    ({ payload } = await jwtVerify(body.software_statement, sweatstackKeys(config, deps), {
       algorithms: ["RS256"],
       issuer: config.sweatstackUrl,
       audience: issuer,

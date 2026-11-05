@@ -229,6 +229,11 @@ export class Database {
     return this.forget(this.d1.prepare("DELETE FROM connections WHERE sub = ? AND consented_at < ?").bind(sub, receivedAt), sub, provider, now);
   }
 
+  /** The person ended it. A consent that landed since stands: they've come back. */
+  forgetDisconnected(sub: string, provider: string, consentedAt: number, now: number): Promise<void> {
+    return this.forget(this.d1.prepare("DELETE FROM connections WHERE sub = ? AND consented_at = ?").bind(sub, consentedAt), sub, provider, now);
+  }
+
   /** Nobody claimed it. A new consent, or a user named at the last moment, keeps it. */
   forgetUnclaimed(sub: string, provider: string, consentedAt: number, now: number): Promise<void> {
     return this.forget(this.d1.prepare("DELETE FROM connections WHERE sub = ? AND consented_at = ? AND user_id IS NULL").bind(sub, consentedAt), sub, provider, now);
@@ -249,6 +254,12 @@ export class Database {
         )
         .bind(provider, sub, now),
     ]);
+  }
+
+  /** Whether this signed request's id is new. Taking it is atomic, so of two copies only one goes through. */
+  async takeJti(jti: string, expiresAt: number): Promise<boolean> {
+    const { meta } = await this.d1.prepare("INSERT OR IGNORE INTO seen_jtis (jti, expires_at) VALUES (?, ?)").bind(jti, expiresAt).run();
+    return meta.changes === 1;
   }
 
   /** Whatever was waiting on this connection is due now: a new consent may be what it needed. */
@@ -430,6 +441,7 @@ export class Database {
       this.d1.prepare("DELETE FROM flows WHERE expires_at <= ?").bind(now),
       this.d1.prepare("DELETE FROM inbox WHERE done_at IS NOT NULL AND done_at <= ?").bind(finishedBefore),
       this.d1.prepare("DELETE FROM tokens WHERE expires_at <= ?").bind(now),
+      this.d1.prepare("DELETE FROM seen_jtis WHERE expires_at <= ?").bind(now),
     ]);
   }
 

@@ -52,6 +52,15 @@ time, have the athlete sign in again.
 npx wrangler d1 execute sweatstack-bridge --remote --command "SELECT kind, attempts, last_error, done_at FROM inbox ORDER BY id DESC LIMIT 5"
 ```
 
+## Give the Portal a Disconnect button
+
+SweatStack reads the bridge's disconnect endpoint from its discovery document when you save the Garmin card.
+If the card was saved before the bridge had one, the Portal has no Disconnect button: open your app's Data
+sources tab and select **Save** on the card again. It keeps your connections.
+
+When an athlete disconnects, SweatStack waits five seconds for the answer. If Garmin is down, the bridge answers
+`503`, the connection stays, and the Portal asks the athlete to try again.
+
 ## Try a sign-in again
 
 Add `prompt=login` to your authorize URL when you test. If the browser is already signed in to your app,

@@ -58,7 +58,7 @@ src/
   connections.ts      What a connection provides, whose it is, and its access token
   inbox/              The job queue, what runs the jobs, and the cron
   oidc/               The OpenID Provider: discovery, keys, registration, authorize, token
-  flows/              The platform's redirect and webhooks, and what follows a consent
+  flows/              The platform's redirect and webhooks, SweatStack's signed disconnect, and what follows a consent
   providers/          Everything specific to one platform
 migrations/           The D1 schema
 scripts/              deploy, dev, and what they share
