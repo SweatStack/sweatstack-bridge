@@ -4,6 +4,7 @@ import type { PlatformVariables } from "./context";
 import { Database } from "./db";
 import type { Deps } from "./deps";
 import { platformCallback } from "./flows/platform-callback";
+import { webhook } from "./flows/webhook";
 import { log } from "./log";
 import { authorize } from "./oidc/authorize";
 import { discovery } from "./oidc/discovery";
@@ -27,6 +28,7 @@ export function createApp(deps: Deps): Hono {
   platform.get("/oidc/:provider/jwks", jwks);
   platform.post("/oidc/:provider/register", register);
   platform.get("/callback/:provider", platformCallback);
+  platform.post("/:provider/:secret/:kind", webhook);
 
   app.route("/", platform);
 
@@ -51,14 +53,15 @@ export function createApp(deps: Deps): Hono {
 function servesPlatform(deps: Deps): MiddlewareHandler<{ Variables: PlatformVariables }> {
   return async (c, next) => {
     const url = new URL(c.req.url);
-    const [, root, name] = url.pathname.split("/");
-    if ((root !== "oidc" && root !== "callback") || name === undefined) return c.notFound();
+    const [, first, second] = url.pathname.split("/");
+    const isWebhook = first !== "oidc" && first !== "callback";
+    const name = isWebhook ? first : second;
 
-    const provider = findProvider(name, deps);
+    const provider = name === undefined ? undefined : findProvider(name, deps);
     if (provider === undefined) return c.notFound();
 
     const result = readConfig(deps.env, provider);
-    if (!result.ok) return c.json({ error: "temporarily_unavailable" }, 503);
+    if (!result.ok) return isWebhook ? c.notFound() : c.json({ error: "temporarily_unavailable" }, 503);
 
     c.set("deps", deps);
     c.set("db", new Database(deps.env.DB));

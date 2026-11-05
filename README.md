@@ -32,7 +32,7 @@ Bridge 0.1 covers activities and activity history.
 
 - [ ] A [live SweatStack app](https://docs.sweatstack.no/learn/applications/going-live/) with the `activities:write` scope. Set it before your first user: a user keeps the scopes they were created with, and SweatStack refuses every file for a user without it
 - [ ] [Keys from Garmin's developer program](https://docs.sweatstack.no/learn/integrations/garmin/). Request them early: it's the one step whose timing you don't control
-- [ ] A Cloudflare account. The free plan covers a small app, and USD 5 a month removes its limits
+- [ ] A Cloudflare account on the [Workers Paid plan](https://developers.cloudflare.com/workers/platform/pricing/): USD 5 a month, which covers a small app. The free plan's CPU limit is too tight for the bridge
 - [ ] You've read [what changes for your users](https://docs.sweatstack.no/learn/applications/self-hosted-integrations/#what-athletes-see-on-your-sign-in-screen). In short: your sign-in page loses its email field, and one person can end up as two users. **Never merge users by email.**
 
 ## Deploy
@@ -48,7 +48,7 @@ Bridge 0.1 covers activities and activity history.
    ```
 
 3. **In SweatStack's OAuth tab:** create a client secret. Then run `npx wrangler secret put SWEATSTACK_APP_ID`, and the same for `SWEATSTACK_CLIENT_SECRET`.
-4. **In Garmin's developer tools:** paste the URLs from `npm run urls`. Then set `GARMIN_CLIENT_ID` and `GARMIN_CLIENT_SECRET` the same way.
+4. **In Garmin's developer tools:** paste the URLs from `npm run urls`. Then set `GARMIN_CLIENT_ID` and `GARMIN_CLIENT_SECRET` the same way, and set `GARMIN_APP_OFFERS` in `wrangler.jsonc` to what your Garmin app is approved for.
 5. **In SweatStack's Data sources tab:** choose "Self-hosted" on the Garmin card and paste the issuer URL.
 6. **Test in a private window.**
 
@@ -77,6 +77,7 @@ Change these in `wrangler.jsonc` in your copy, not in the Cloudflare dashboard, 
 |---|---|
 | `SWEATSTACK_URL` | Where SweatStack runs. Leave as is |
 | `BACKFILL_DAYS` | Days of history to request on connecting. Default 90 |
+| `GARMIN_APP_OFFERS` | What your Garmin app is approved for: `activities`, `activity_history`, `wellness`, `workouts`. Athletes are only asked to reconnect for what your app can actually request |
 
 ## Update
 

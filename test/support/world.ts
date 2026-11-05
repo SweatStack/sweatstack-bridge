@@ -3,6 +3,8 @@ import { createLocalJWKSet, jwtVerify, type JSONWebKeySet, type JWTPayload } fro
 import { generateSigningKey } from "../../scripts/lib/signing-key.mjs";
 import { createApp } from "../../src/app";
 import type { Env } from "../../src/config";
+import type { Deps } from "../../src/deps";
+import { sweep } from "../../src/inbox/sweeper";
 import { FakeGarmin, GARMIN_HOSTS, type Account } from "../fakes/garmin";
 import { FakeSweatStack, type FakeSweatStackOptions } from "../fakes/sweatstack";
 import { network, type Handler } from "./network";
@@ -32,6 +34,8 @@ export async function resetDatabase({ withSigningKey }: { withSigningKey: boolea
 
 export interface WorldOptions {
   sweatstack?: FakeSweatStackOptions;
+  /** Settings on top of the complete ones. */
+  settings?: Record<string, string>;
   /** Answers a call instead of the fake, for a test of a bad moment at SweatStack. Undefined lets it through. */
   intercept?: (request: Request) => Response | undefined | Promise<Response | undefined>;
 }
@@ -45,7 +49,7 @@ export interface Client {
  * The bridge between a fake SweatStack and a fake Garmin, and SweatStack's side of a sign-in: the same
  * requests and the same checks as its relying party.
  */
-export function world({ sweatstack: sweatstackOptions, intercept }: WorldOptions = {}) {
+export function world({ sweatstack: sweatstackOptions, settings: extraSettings, intercept }: WorldOptions = {}) {
   const clock = { now: 1_800_000_000 };
   const sweatstack = new FakeSweatStack({ now: () => clock.now, ...sweatstackOptions });
   const garmin = new FakeGarmin();
@@ -56,20 +60,27 @@ export function world({ sweatstack: sweatstackOptions, intercept }: WorldOptions
     GARMIN_CLIENT_ID: garmin.clientId,
     GARMIN_CLIENT_SECRET: garmin.clientSecret,
     BACKFILL_DAYS: "90",
+    ...extraSettings,
   };
   const background: Promise<unknown>[] = [];
   const hooks: { onSleep: () => void } = { onSleep: () => {} };
   const sleeps: number[] = [];
 
+  /** Whatever reached a host that isn't Garmin's or SweatStack's: a forged ping's address. */
+  const foreignCalls: { url: string; authorization: string | null }[] = [];
+  const elsewhere: Handler = (request) => {
+    foreignCalls.push({ url: request.url, authorization: request.headers.get("Authorization") });
+    return new Response("not a file");
+  };
   const hosts: Record<string, Handler> = {
     [new URL(sweatstack.url).host]: async (request) => (await intercept?.(request.clone())) ?? sweatstack.fetch(request),
     ...Object.fromEntries(GARMIN_HOSTS.map((host) => [host, garmin.fetch])),
   };
 
   const bridgeEnv: Env = { DB: env.DB, ...settings };
-  const app = createApp({
+  const deps: Deps = {
     env: bridgeEnv,
-    fetch: network(hosts),
+    fetch: network(hosts, elsewhere),
     now: () => clock.now,
     sleep: async (milliseconds) => {
       sleeps.push(milliseconds);
@@ -78,7 +89,8 @@ export function world({ sweatstack: sweatstackOptions, intercept }: WorldOptions
     waitUntil: (work) => {
       background.push(work);
     },
-  });
+  };
+  const app = createApp(deps);
 
   const request = (path: string, init?: RequestInit) => app.request(`${ORIGIN}${path}`, init, bridgeEnv);
   const discoveryPath = `/oidc/${PROVIDER}/.well-known/openid-configuration`;
@@ -121,9 +133,32 @@ export function world({ sweatstack: sweatstackOptions, intercept }: WorldOptions
   const authorize = (client: Client, overrides: Record<string, string | null> = {}) =>
     request(`/oidc/${PROVIDER}/authorize?${authorizationQuery(client, overrides)}`);
 
-  /** Runs everything the bridge left running behind its answers. */
+  /** Runs everything the bridge left running behind its answers, including what that work started. */
   const settled = async () => {
-    await Promise.all(background);
+    while (background.length > 0) await Promise.all(background.splice(0));
+  };
+
+  /** Garmin posting to a webhook. The path comes from `npm run urls` in real life. */
+  const webhook = async (kind: string, body: unknown, { secret }: { secret?: string } = {}) => {
+    const stored = await env.DB.prepare("SELECT value FROM meta WHERE key = 'webhook_secret'").first<{ value: string }>();
+    return request(`/${PROVIDER}/${secret ?? stored?.value}/${kind}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: typeof body === "string" ? body : JSON.stringify(body),
+    });
+  };
+
+  /** A ping about these files, and everything it set off. */
+  const ping = async (...files: unknown[]) => {
+    const response = await webhook("activity-files", { activityFiles: files });
+    await settled();
+    return response;
+  };
+
+  /** One run of the cron. */
+  const cron = async () => {
+    await sweep(deps);
+    await settled();
   };
 
   const exchange = (client: Client, form: Record<string, string>, secret = client.clientSecret) =>
@@ -170,7 +205,7 @@ export function world({ sweatstack: sweatstackOptions, intercept }: WorldOptions
     return { ...flow, claims, sub: claims.sub as string };
   };
 
-  return { sweatstack, garmin, clock, hooks, sleeps, request, discoveryPath, postRegistration, register, authorize, exchange, consent, signIn, settled, verifyIdToken };
+  return { sweatstack, garmin, clock, hooks, sleeps, foreignCalls, webhook, ping, cron, request, discoveryPath, postRegistration, register, authorize, exchange, consent, signIn, settled, verifyIdToken };
 }
 
 export function pathOf(url: string): string {

@@ -1,4 +1,5 @@
 import { declare, type ConnectionServices } from "../connections";
+import { drain } from "../inbox/worker";
 import { log } from "../log";
 import { SweatStackError } from "../sweatstack";
 
@@ -25,10 +26,13 @@ export async function declareAfterConsent(services: ConnectionServices, sub: str
   } catch (error) {
     log("connection_call_failed", { provider: provider.name, status: error instanceof SweatStackError ? (error.status ?? null) : null });
   }
+  const now = deps.now();
   if (userId === null) {
-    const now = deps.now();
     await db.enqueue({ kind: "declare", provider: provider.name, sub, nextAttemptAt: now + RETRY_AFTER_SECONDS, receivedAt: now });
+    return;
   }
+  await db.wakeJobs(sub, now);
+  deps.waitUntil(drain(deps));
 }
 
 /**
@@ -41,7 +45,11 @@ export async function waitForUser(services: ConnectionServices, sub: string): Pr
     for (let attempt = 0; attempt < WAIT_ATTEMPTS; attempt += 1) {
       const connection = await db.connection(sub);
       if (connection === null || connection.user_id !== null) return;
-      if ((await declare(services, connection)) !== null) return;
+      if ((await declare(services, connection)) !== null) {
+        // Files may have arrived while it waited, and they shouldn't wait for the next run.
+        await drain(deps);
+        return;
+      }
       await deps.sleep(WAIT_INTERVAL_MS);
     }
   } catch (error) {

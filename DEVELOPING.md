@@ -3,7 +3,8 @@
 How the bridge works, and how to run and change it. Start here if you're changing your own copy.
 
 **Being built.** This describes the code as it's intended to be, and some of it doesn't exist yet. So far
-there's the OpenID Provider and the sign-in. Files, retries and the owner's commands come next.
+there's the OpenID Provider, the sign-in and relaying activity files. Permission changes, deregistration,
+backfill, disconnect and the owner's commands come next.
 
 ## How it works
 
@@ -31,9 +32,10 @@ src/
   http.ts             Every outbound call goes through here
   log.ts              The one way to log
   sweatstack.ts       The calls to SweatStack's public API, and nothing else
-  connections.ts      What a connection provides, and whose it is
+  connections.ts      What a connection provides, whose it is, and its access token
+  inbox/              The job queue, what runs the jobs, and the cron
   oidc/               The OpenID Provider: discovery, keys, registration, authorize, token
-  flows/              The platform's redirect, and what follows a consent
+  flows/              The platform's redirect and webhooks, and what follows a consent
   providers/          Everything specific to one platform
 migrations/           The D1 schema
 scripts/              deploy, dev, and what they share
@@ -83,16 +85,15 @@ Check every change against these.
 
 Core code never names a platform. Everything specific to one lives in `src/providers/`, and a test holds that.
 
-## Free plan limits
+## Limits
 
-The design assumes Cloudflare's free plan: 10 ms of CPU per request or run, and 50 external subrequests.
+The bridge needs Cloudflare's Workers Paid plan: 30 seconds of CPU per request by default, and 10,000
+subrequests. The free plan's 10 ms isn't enough. Measured on a real sign-in, from cold, the sign-in's requests
+took 10 to 15 ms, and a request that does almost nothing took 8.
 
-| Work | CPU, measured |
-|---|---|
-| Generating an RSA key | 24 to 222 ms, so the deploy script does it and the Worker never does |
-| Signing an ID token | 1 to 3 ms |
-| Relaying a file | About 3 ms per MB |
-| Verifying a registration | 11 ms from cold. It's rare, and SweatStack can simply be asked to save again |
+A run of the job queue still stops at 50 jobs or 25 seconds, so that one bad minute can't run for ever. The
+next run carries on. Generating an RSA key takes up to 222 ms, and the deploy script does that, so the Worker
+never needs to.
 
 ## Tests
 

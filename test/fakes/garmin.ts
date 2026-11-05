@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 
 /**
  * Garmin as SweatStack's hosted integration found it, on staging and in production: consent, the token
@@ -14,6 +14,12 @@ export interface Account {
   userId: string;
   /** What the person grants. */
   permissions: string[];
+}
+
+interface Grant {
+  account: Account;
+  /** A refresh token that's been used once is spent, and using it again revokes the whole grant. */
+  revoked: boolean;
 }
 
 interface PendingCode {
@@ -32,11 +38,16 @@ export class FakeGarmin {
   readonly clientSecret: string;
 
   /** Answers these instead of the real thing, one per call, for a test of a bad moment at Garmin. */
-  readonly failures = { token: [] as number[], userId: [] as number[], permissions: [] as number[] };
+  readonly failures = { token: [] as number[], userId: [] as number[], permissions: [] as number[], file: [] as number[] };
+  /** Every refresh request that reached Garmin. */
+  readonly refreshes: string[] = [];
+  readonly downloads: string[] = [];
 
   private readonly app = new Hono();
   private readonly codes = new Map<string, PendingCode>();
-  private readonly accessTokens = new Map<string, Account>();
+  private readonly accessTokens = new Map<string, Grant>();
+  private readonly refreshTokens = new Map<string, { grant: Grant; spent: boolean }>();
+  private readonly files = new Map<string, { bytes: Uint8Array; token: string }>();
   private sequence = 0;
 
   constructor({ clientId = "test-garmin-id", clientSecret = "test-garmin-secret" }: FakeGarminOptions = {}) {
@@ -73,6 +84,46 @@ export class FakeGarmin {
     return back.toString();
   }
 
+  /** A file becoming ready. Returns the ping Garmin posts, with the `token` parameter it adds on OAuth 2.0. */
+  fileReady(account: Account, activityId: string, overrides: Record<string, unknown> = {}) {
+    const token = this.id("file-token");
+    this.files.set(activityId, { bytes: new TextEncoder().encode(`FIT-${activityId}`), token });
+    return {
+      userId: account.userId,
+      summaryId: `${activityId}-file`,
+      activityId,
+      fileType: "FIT",
+      startTimeInSeconds: 1_800_000_000,
+      callbackURL: `https://apis.garmin.com/wellness-api/rest/activityFile?id=${activityId}&token=${token}`,
+      ...overrides,
+    };
+  }
+
+  /** Access tokens stop working now, whatever their expiry said. Refresh tokens carry on. */
+  invalidateAccessTokens(): void {
+    this.accessTokens.clear();
+  }
+
+  /** The person withdraws consent in Garmin Connect. */
+  revokeEverything(): void {
+    for (const { grant } of this.refreshTokens.values()) grant.revoked = true;
+    this.accessTokens.clear();
+  }
+
+  private issueTokens(c: Context, grant: Grant) {
+    const accessToken = this.id("garmin-access");
+    const refreshToken = this.id("garmin-refresh");
+    this.accessTokens.set(accessToken, grant);
+    this.refreshTokens.set(refreshToken, { grant, spent: false });
+    return c.json({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      token_type: "bearer",
+      expires_in: TOKEN_LIFETIME_SECONDS,
+      refresh_token_expires_in: REFRESH_LIFETIME_SECONDS,
+    });
+  }
+
   private routes(): void {
     this.app.post("/di-oauth2-service/oauth/token", async (c) => {
       const failure = this.failures.token.shift();
@@ -81,6 +132,19 @@ export class FakeGarmin {
         return c.json({ error: "invalid_client" }, 401);
       }
       const form = await c.req.parseBody();
+
+      if (form.grant_type === "refresh_token") {
+        const token = String(form.refresh_token);
+        this.refreshes.push(token);
+        const entry = this.refreshTokens.get(token);
+        if (!entry || entry.spent || entry.grant.revoked) {
+          if (entry) entry.grant.revoked = true;
+          return c.json({ error: "invalid_grant" }, 400);
+        }
+        entry.spent = true;
+        return this.issueTokens(c, entry.grant);
+      }
+
       const pending = this.codes.get(String(form.code));
       this.codes.delete(String(form.code));
       const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(form.code_verifier)));
@@ -88,15 +152,17 @@ export class FakeGarmin {
       if (form.grant_type !== "authorization_code" || !pending || pending.redirectUri !== form.redirect_uri || pending.challenge !== challenge) {
         return c.json({ error: "invalid_grant" }, 400);
       }
-      const accessToken = this.id("garmin-access");
-      this.accessTokens.set(accessToken, pending.account);
-      return c.json({
-        access_token: accessToken,
-        refresh_token: this.id("garmin-refresh"),
-        token_type: "bearer",
-        expires_in: TOKEN_LIFETIME_SECONDS,
-        refresh_token_expires_in: REFRESH_LIFETIME_SECONDS,
-      });
+      return this.issueTokens(c, { account: pending.account, revoked: false });
+    });
+
+    this.app.get("/wellness-api/rest/activityFile", (c) => {
+      this.downloads.push(c.req.query("id") ?? "");
+      const failure = this.failures.file.shift();
+      if (failure !== undefined) return c.body(null, failure as 500);
+      if (!this.bearer(c.req.header("Authorization"))) return c.body(null, 401);
+      const file = this.files.get(c.req.query("id") ?? "");
+      if (!file || file.token !== c.req.query("token")) return c.body(null, 404);
+      return new Response(file.bytes);
     });
 
     this.app.get("/partner-gateway/rest/user/id", (c) => {
@@ -115,7 +181,9 @@ export class FakeGarmin {
   }
 
   private bearer(header: string | undefined): Account | undefined {
-    return header?.startsWith("Bearer ") ? this.accessTokens.get(header.slice("Bearer ".length)) : undefined;
+    if (!header?.startsWith("Bearer ")) return undefined;
+    const grant = this.accessTokens.get(header.slice("Bearer ".length));
+    return grant && !grant.revoked ? grant.account : undefined;
   }
 
   private id(kind: string): string {

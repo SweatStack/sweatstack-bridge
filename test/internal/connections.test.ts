@@ -152,7 +152,10 @@ describe("the capability map", () => {
   it("is the same as the shared fixtures say", async () => {
     const { default: fixtures } = await import("../fixtures/garmin/capability-maps.json");
     const { garmin } = await import("../../src/providers/garmin");
-    const provider = garmin({ env: { DB: env.DB }, fetch: () => Promise.reject(new Error("no network")), now: () => 0 });
-    for (const { state, capabilities } of fixtures) expect(provider.capabilityMap(state)).toEqual(capabilities);
+    for (const { name, offers, state, capabilities } of fixtures) {
+      const settings = offers === undefined ? {} : { GARMIN_APP_OFFERS: offers };
+      const provider = garmin({ env: { DB: env.DB, ...settings }, fetch: () => Promise.reject(new Error("no network")), now: () => 0 });
+      expect(provider.capabilityMap(state), name).toEqual(capabilities);
+    }
   });
 });

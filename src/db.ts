@@ -54,7 +54,22 @@ export interface Consent {
 
 export type MetaKey = "webhook_secret" | "subject_key" | "signing_key";
 
-export type JobKind = "declare";
+export type JobKind = "activity_file" | "declare";
+
+export interface JobRow {
+  id: number;
+  kind: JobKind;
+  provider: string;
+  sub: string;
+  external_id: string | null;
+  payload: string | null;
+  attempts: number;
+  next_attempt_at: number;
+  lease_until: number | null;
+  last_error: string | null;
+  done_at: number | null;
+  received_at: number;
+}
 
 export class Database {
   constructor(private readonly d1: D1Database) {}
@@ -62,6 +77,18 @@ export class Database {
   async meta(key: MetaKey): Promise<string | null> {
     const row = await this.d1.prepare("SELECT value FROM meta WHERE key = ?").bind(key).first<{ value: string }>();
     return row?.value ?? null;
+  }
+
+  async metaValue(key: string): Promise<string | null> {
+    const row = await this.d1.prepare("SELECT value FROM meta WHERE key = ?").bind(key).first<{ value: string }>();
+    return row?.value ?? null;
+  }
+
+  async setMeta(key: string, value: string): Promise<void> {
+    await this.d1
+      .prepare("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value")
+      .bind(key, value)
+      .run();
   }
 
   client(provider: string): Promise<ClientRow | null> {
@@ -157,9 +184,60 @@ export class Database {
       .run();
   }
 
-  /** SweatStack has named the user, so the flow's `state` has done its job. */
-  async setConnectionUser(sub: string, userId: string): Promise<void> {
-    await this.d1.prepare("UPDATE connections SET user_id = ?, rp_state = NULL WHERE sub = ?").bind(userId, sub).run();
+  /** Whatever was waiting on this connection is due now: a new consent may be what it needed. */
+  async wakeJobs(sub: string, now: number): Promise<void> {
+    await this.d1.prepare("UPDATE inbox SET next_attempt_at = ? WHERE sub = ? AND done_at IS NULL AND lease_until IS NULL").bind(now, sub).run();
+  }
+
+  /**
+   * SweatStack has named the user, so the flow's `state` has done its job, and whatever was waiting for
+   * this user is due now.
+   */
+  async setConnectionUser(sub: string, userId: string, now: number): Promise<void> {
+    await this.d1.batch([
+      this.d1.prepare("UPDATE connections SET user_id = ?, rp_state = NULL WHERE sub = ?").bind(userId, sub),
+      this.d1.prepare("UPDATE inbox SET next_attempt_at = ? WHERE sub = ? AND done_at IS NULL AND lease_until IS NULL").bind(now, sub),
+    ]);
+  }
+
+  /**
+   * Claims the right to refresh, before anything is sent: a refresh token works once, and using a spent
+   * one may revoke the grant. Null when someone else holds the claim.
+   */
+  claimRefresh(sub: string, now: number, until: number): Promise<ConnectionRow | null> {
+    return this.d1
+      .prepare(
+        `UPDATE connections SET refresh_claimed_until = ?1
+         WHERE sub = ?2 AND (refresh_claimed_until IS NULL OR refresh_claimed_until <= ?3)
+         RETURNING *`,
+      )
+      .bind(until, sub, now)
+      .first<ConnectionRow>();
+  }
+
+  /** Lands only while the claim holds, so a new consent that replaced it keeps its own tokens. */
+  async saveRefreshedTokens(
+    sub: string,
+    claim: number,
+    tokens: { accessToken: string; refreshToken: string; accessExpiresAt: number; refreshExpiresAt: number },
+  ): Promise<void> {
+    await this.d1
+      .prepare(
+        `UPDATE connections SET access_token = ?, refresh_token = ?, access_expires_at = ?, refresh_expires_at = ?, refresh_claimed_until = NULL
+         WHERE sub = ? AND refresh_claimed_until = ?`,
+      )
+      .bind(tokens.accessToken, tokens.refreshToken, tokens.accessExpiresAt, tokens.refreshExpiresAt, sub, claim)
+      .run();
+  }
+
+  async releaseRefreshClaim(sub: string, claim: number, { needsReconnect }: { needsReconnect: boolean }): Promise<void> {
+    await this.d1
+      .prepare(
+        `UPDATE connections SET refresh_claimed_until = NULL, needs_reconnect = CASE WHEN ?1 THEN 1 ELSE needs_reconnect END
+         WHERE sub = ?2 AND refresh_claimed_until = ?3`,
+      )
+      .bind(needsReconnect ? 1 : 0, sub, claim)
+      .run();
   }
 
   async sweatstackToken(holder: string, now: number): Promise<string | null> {
@@ -182,6 +260,72 @@ export class Database {
 
   async deleteSweatstackToken(holder: string): Promise<void> {
     await this.d1.prepare("DELETE FROM tokens WHERE holder = ?").bind(holder).run();
+  }
+
+  /** One atomic statement: two runs can never claim the same job. */
+  claimJob(now: number, leaseUntil: number): Promise<JobRow | null> {
+    return this.d1
+      .prepare(
+        `UPDATE inbox SET lease_until = ?1, attempts = attempts + 1
+         WHERE id = (
+           SELECT id FROM inbox
+           WHERE done_at IS NULL AND next_attempt_at <= ?2 AND (lease_until IS NULL OR lease_until <= ?2)
+           ORDER BY next_attempt_at, id LIMIT 1
+         )
+         RETURNING *`,
+      )
+      .bind(leaseUntil, now)
+      .first<JobRow>();
+  }
+
+  /** A finished job stays for `npm run status`, without what it needed to run. `lastError` set means it failed. */
+  async finishJob(id: number, now: number, lastError: string | null): Promise<void> {
+    await this.d1
+      .prepare("UPDATE inbox SET done_at = ?, last_error = ?, payload = NULL, lease_until = NULL WHERE id = ?")
+      .bind(now, lastError, id)
+      .run();
+  }
+
+  async retryJob(id: number, nextAttemptAt: number, reason: string): Promise<void> {
+    await this.d1
+      .prepare("UPDATE inbox SET next_attempt_at = ?, last_error = ?, lease_until = NULL WHERE id = ?")
+      .bind(nextAttemptAt, reason, id)
+      .run();
+  }
+
+  /** A repeated ping about the same file adds nothing. */
+  async enqueueFiles(files: { provider: string; sub: string; externalId: string; payload: string; now: number }[]): Promise<void> {
+    if (files.length === 0) return;
+    await this.d1.batch(
+      files.map((file) =>
+        this.d1
+          .prepare(
+            `INSERT INTO inbox (kind, provider, sub, external_id, payload, next_attempt_at, received_at)
+             VALUES ('activity_file', ?1, ?2, ?3, ?4, ?5, ?5)
+             ON CONFLICT (kind, sub, external_id) DO NOTHING`,
+          )
+          .bind(file.provider, file.sub, file.externalId, file.payload, file.now),
+      ),
+    );
+  }
+
+  async enqueueDeclareForAll(provider: string, now: number): Promise<void> {
+    await this.d1
+      .prepare(
+        `INSERT INTO inbox (kind, provider, sub, next_attempt_at, received_at)
+         SELECT 'declare', provider, sub, ?1, ?1 FROM connections WHERE provider = ?2`,
+      )
+      .bind(now, provider)
+      .run();
+  }
+
+  /** Deletes what's over. Each statement touches nothing when there's nothing to delete. */
+  async purge(now: number, finishedBefore: number): Promise<void> {
+    await this.d1.batch([
+      this.d1.prepare("DELETE FROM flows WHERE expires_at <= ?").bind(now),
+      this.d1.prepare("DELETE FROM inbox WHERE done_at IS NOT NULL AND done_at <= ?").bind(finishedBefore),
+      this.d1.prepare("DELETE FROM tokens WHERE expires_at <= ?").bind(now),
+    ]);
   }
 
   async enqueue(job: { kind: JobKind; provider: string; sub: string; nextAttemptAt: number; receivedAt: number }): Promise<void> {

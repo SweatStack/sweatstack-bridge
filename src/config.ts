@@ -21,7 +21,7 @@ const DEFAULT_BACKFILL_DAYS = 90;
  * Reads the settings, reporting every problem at once. The first deploy happens before the owner has
  * their keys, so an incomplete configuration is a normal state and not an error.
  */
-export function readConfig(env: Env, provider: { requiredSettings: readonly string[] }): ConfigResult {
+export function readConfig(env: Env, provider: { requiredSettings: readonly string[]; settingProblems?: () => string[] }): ConfigResult {
   const problems: string[] = [];
 
   const required = (name: string): string => {
@@ -35,6 +35,7 @@ export function readConfig(env: Env, provider: { requiredSettings: readonly stri
   const clientSecret = required("SWEATSTACK_CLIENT_SECRET");
   provider.requiredSettings.forEach(required);
   const backfillDays = parseBackfillDays(setting(env, "BACKFILL_DAYS"), problems);
+  problems.push(...(provider.settingProblems?.() ?? []));
 
   if (problems.length > 0) return { ok: false, problems };
   return { ok: true, config: { sweatstackUrl, appId, clientSecret, backfillDays } };
@@ -64,8 +65,8 @@ function parseSweatStackUrl(value: string, problems: string[]): string {
 function parseBackfillDays(value: string | undefined, problems: string[]): number {
   if (value === undefined) return DEFAULT_BACKFILL_DAYS;
   const days = Number(value);
-  if (!Number.isInteger(days) || days < 0) {
-    problems.push("BACKFILL_DAYS must be a whole number");
+  if (!Number.isInteger(days) || days < 1) {
+    problems.push("BACKFILL_DAYS must be a whole number above 0");
     return DEFAULT_BACKFILL_DAYS;
   }
   return days;

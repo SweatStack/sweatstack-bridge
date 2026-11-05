@@ -13,8 +13,14 @@
   // those alone, even the ones that aren't sensitive. They're listed in .dev.vars.example.
   "vars": {
     "SWEATSTACK_URL": "https://app.sweatstack.no",
-    "BACKFILL_DAYS": "90"
+    "BACKFILL_DAYS": "90",
+    // What your Garmin app is approved for, from: activities, activity_history, wellness, workouts. It
+    // decides what athletes are asked to fix: reconnecting can't get what your app can't request.
+    "GARMIN_APP_OFFERS": "activities,activity_history"
   },
+
+  // Every minute: retries, and deleting what's over.
+  "triggers": { "crons": ["* * * * *"] },
 
   // No database_id: the first deploy provisions the database and the deploy button records its id.
   "d1_databases": [

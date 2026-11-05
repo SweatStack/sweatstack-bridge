@@ -64,7 +64,7 @@ describe("readConfig", () => {
     expect(read(withoutDays)).toMatchObject({ config: { backfillDays: 90 } });
     expect(read({ ...COMPLETE_SETTINGS, BACKFILL_DAYS: "soon" })).toEqual({
       ok: false,
-      problems: ["BACKFILL_DAYS must be a whole number"],
+      problems: ["BACKFILL_DAYS must be a whole number above 0"],
     });
   });
 });

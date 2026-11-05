@@ -2,10 +2,11 @@ import type { Config } from "./config";
 import type { Database } from "./db";
 import type { Deps } from "./deps";
 import { outbound } from "./http";
-import type { CapabilityMap } from "./providers/types";
+import type { CapabilityMap, DownloadedFile } from "./providers/types";
 
 /** The athlete's browser may be waiting on this call, so it can't take long. */
 const REQUEST_TIMEOUT_MS = 2_000;
+const UPLOAD_TIMEOUT_MS = 30_000;
 
 /** A token this close to its end isn't worth starting a request with. */
 const TOKEN_EXPIRY_MARGIN_SECONDS = 30;
@@ -27,9 +28,9 @@ export class SweatStackError extends Error {
   }
 }
 
-async function call(services: SweatStackServices, path: string, init: RequestInit): Promise<Response> {
+async function call(services: SweatStackServices, path: string, init: RequestInit, timeoutMs = REQUEST_TIMEOUT_MS): Promise<Response> {
   try {
-    return await outbound(services.deps, REQUEST_TIMEOUT_MS)(`${services.config.sweatstackUrl}${path}`, init);
+    return await outbound(services.deps, timeoutMs)(`${services.config.sweatstackUrl}${path}`, init);
   } catch {
     throw new SweatStackError();
   }
@@ -84,4 +85,55 @@ export async function declareConnection(
   if (!response.ok) throw new SweatStackError(response.status);
   const { user_id: userId } = (await response.json()) as { user_id: string | null };
   return userId;
+}
+
+/** Says a connection is over. Answers the same whether SweatStack knew of it or not, so repeating is safe. */
+export async function deleteConnection(services: SweatStackServices, provider: string, subject: string): Promise<void> {
+  const response = await callAsApp(services, `/api/v1/applications/${services.config.appId}/connections/${provider}/${subject}`, { method: "DELETE" });
+  if (!response.ok) throw new SweatStackError(response.status);
+}
+
+/** A token as this user, cached for its short life because each mint leaves a row at SweatStack. */
+async function userToken(services: SweatStackServices, userId: string): Promise<string> {
+  const { config, db, deps } = services;
+  const cached = await db.sweatstackToken(userId, deps.now() + TOKEN_EXPIRY_MARGIN_SECONDS);
+  if (cached !== null) return cached;
+
+  const response = await callAsApp(services, `/api/v1/applications/${config.appId}/users/${userId}/token`, { method: "POST" });
+  if (!response.ok) throw new SweatStackError(response.status);
+  const { access_token: accessToken, expires_in: expiresIn } = (await response.json()) as { access_token: string; expires_in: number };
+  await db.saveSweatstackToken(userId, accessToken, deps.now() + expiresIn);
+  return accessToken;
+}
+
+/**
+ * Relays one file, as the athlete. SweatStack dedupes on `externalId`, so every retry is safe.
+ *
+ * @returns whether SweatStack took the file, as opposed to refusing that file in particular.
+ */
+export async function uploadActivityFile(
+  services: SweatStackServices,
+  upload: { userId: string; provider: string; externalId: string; file: DownloadedFile },
+): Promise<{ accepted: boolean }> {
+  const attempt = async () => {
+    const form = new FormData();
+    form.append("files", new File([upload.file.bytes], upload.file.filename));
+    form.append("external_id", upload.externalId);
+    form.append("provider", upload.provider);
+    return call(
+      services,
+      "/api/v1/activities/upload",
+      { method: "POST", headers: { Authorization: `Bearer ${await userToken(services, upload.userId)}` }, body: form },
+      UPLOAD_TIMEOUT_MS,
+    );
+  };
+
+  let response = await attempt();
+  if (response.status === 401) {
+    await services.db.deleteSweatstackToken(upload.userId);
+    response = await attempt();
+  }
+  if (!response.ok) throw new SweatStackError(response.status);
+  const { sources } = (await response.json()) as { sources?: { status?: string }[] };
+  return { accepted: sources?.[0]?.status !== "failed" };
 }

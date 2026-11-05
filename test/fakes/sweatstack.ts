@@ -70,7 +70,9 @@ export class FakeSweatStack {
   /** Everything sent to it, in order, for a test to assert on. */
   readonly calls: { method: string; path: string }[] = [];
   readonly users = new Map<string, FakeUser>();
-  readonly uploads: { userId: string; externalId: string | null; provider: string | null; filename: string }[] = [];
+  readonly uploads: { userId: string; externalId: string | null; provider: string | null; filename: string; content: string }[] = [];
+  /** Files the relay refuses at the door, by external id, as it does a file it can't read. */
+  readonly refusedFiles = new Set<string>();
   /** From the routes by user id, for an app with its own sign-in, as `user:provider`. */
   readonly declarations = new Map<string, Declaration>();
   /** From the connection call, by subject. */
@@ -324,16 +326,20 @@ export class FakeSweatStack {
       if (files.length === 0 || files.length > MAX_FILES) return c.json({ detail: "Send 1 to 10 files." }, 400);
       const externalIds = form.getAll("external_id").map(String);
       const provider = form.get("provider");
-      const sources = files.map((file, index) => {
-        const externalId = externalIds[index] ?? null;
-        this.uploads.push({
-          userId: issued.sub,
-          externalId,
-          provider: typeof provider === "string" ? provider : null,
-          filename: file.name,
-        });
-        return { id: this.sourceId(issued.sub, externalId), status: "processing" };
-      });
+      const sources = await Promise.all(
+        files.map(async (file, index) => {
+          const externalId = externalIds[index] ?? null;
+          this.uploads.push({
+            userId: issued.sub,
+            externalId,
+            provider: typeof provider === "string" ? provider : null,
+            filename: file.name,
+            content: await file.text(),
+          });
+          const refused = externalId !== null && this.refusedFiles.has(externalId);
+          return { id: this.sourceId(issued.sub, externalId), status: refused ? "failed" : "processing" };
+        }),
+      );
       return c.json({ sources }, 202);
     });
   }
