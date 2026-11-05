@@ -1,4 +1,4 @@
-import { accessToken, declare, NeedsReconnect, RefreshInProgress, type ConnectionServices } from "../connections";
+import { declare, NeedsReconnect, permissionsOf, RefreshInProgress, withAccessToken, type ConnectionServices } from "../connections";
 import { readConfig } from "../config";
 import { Database, type ConnectionRow, type JobRow } from "../db";
 import type { Deps } from "../deps";
@@ -6,6 +6,7 @@ import { log } from "../log";
 import { findProvider } from "../providers";
 import { PlatformError } from "../providers/types";
 import { deleteConnection, SweatStackError, uploadActivityFile } from "../sweatstack";
+import { backfillJob, deregistrationJob, expireUnclaimedJob, permissionsJob, refreshGrantJob } from "./lifecycle";
 import { claimNext, settle, type JobResult } from "./queue";
 
 /** Generous for a small app, and it leaves room for the next minute's run. */
@@ -14,14 +15,15 @@ const MAX_RUN_SECONDS = 25;
 
 /**
  * Works through what's due. The live path calls this right after a webhook for speed, and the cron for
- * everything else. Two runs at once are fine, because a job is claimed by exactly one of them.
+ * everything else. Two runs at once are fine, because a job is claimed by exactly one of them. With a
+ * `sub`, only that connection's jobs.
  */
-export async function drain(deps: Deps): Promise<void> {
+export async function drain(deps: Deps, { sub = null }: { sub?: string | null } = {}): Promise<void> {
   const db = new Database(deps.env.DB);
   const startedAt = deps.now();
   try {
     for (let run = 0; run < MAX_JOBS_PER_RUN && deps.now() - startedAt < MAX_RUN_SECONDS; run += 1) {
-      const job = await claimNext(db, deps.now());
+      const job = await claimNext(db, deps.now(), sub);
       if (job === null) return;
       const result = await runJob(deps, db, job);
       await settle(db, job, result, deps.now());
@@ -46,6 +48,16 @@ async function runJob(deps: Deps, db: Database, job: JobRow): Promise<JobResult>
         return connection === null ? { outcome: "done" } : await relayFile(services, connection, job);
       case "declare":
         return await declareJob(services, connection, job);
+      case "permissions_change":
+        return connection === null ? { outcome: "done" } : await permissionsJob(services, connection, job);
+      case "backfill":
+        return connection === null ? { outcome: "done" } : await backfillJob(services, connection, job);
+      case "deregistration":
+        return connection === null ? { outcome: "done" } : await deregistrationJob(services, connection, job);
+      case "refresh_grant":
+        return connection === null ? { outcome: "done" } : await refreshGrantJob(services, connection);
+      case "expire_unclaimed":
+        return connection === null ? { outcome: "done" } : await expireUnclaimedJob(services, connection);
     }
   } catch (error) {
     return classify(error);
@@ -57,9 +69,7 @@ async function relayFile(services: ConnectionServices, connection: ConnectionRow
   // A file is never uploaded before SweatStack has said whose it is.
   if (connection.user_id === null) return { outcome: "retry", reason: "waiting_for_user" };
   if (job.payload === null || job.external_id === null) return { outcome: "give_up", reason: "invalid_job" };
-  if (!provider.mayRelayFiles(connection.permissions === null ? null : (JSON.parse(connection.permissions) as string[]))) {
-    return { outcome: "done" };
-  }
+  if (!provider.mayRelayFiles(permissionsOf(connection))) return { outcome: "done" };
 
   const reference = JSON.parse(job.payload) as unknown;
   if (!provider.isDownloadAllowed(reference)) {
@@ -67,13 +77,7 @@ async function relayFile(services: ConnectionServices, connection: ConnectionRow
     return { outcome: "give_up", reason: "foreign_download_host" };
   }
 
-  let file;
-  try {
-    file = await provider.downloadFile(await accessToken(services, connection), reference);
-  } catch (error) {
-    if (!(error instanceof PlatformError) || error.status !== 401) throw error;
-    file = await provider.downloadFile(await accessToken(services, connection, { force: true }), reference);
-  }
+  const file = await withAccessToken(services, connection, (token) => provider.downloadFile(token, reference));
 
   const outcome = await uploadActivityFile(services, {
     userId: connection.user_id,
@@ -91,6 +95,11 @@ async function declareJob(services: ConnectionServices, connection: ConnectionRo
     return { outcome: "done" };
   }
   const userId = await declare(services, connection);
+  // It may have ended while that call was under way, and SweatStack has to hear the end last.
+  if ((await services.db.connection(job.sub)) === null) {
+    await deleteConnection(services, services.provider.name, job.sub);
+    return { outcome: "done" };
+  }
   return userId === null ? { outcome: "retry", reason: "waiting_for_user" } : { outcome: "done" };
 }
 
@@ -107,8 +116,8 @@ function classify(error: unknown): JobResult {
     const { status } = error;
     if (status === undefined) return { outcome: "retry", reason: "sweatstack_unreachable" };
     if (status === 429 || status >= 500 || status === 401) return { outcome: "retry", reason: `sweatstack_${status}` };
-    // Retrying can't help. 403: a user's token without `activities:write`, or the app's card isn't set
-    // up. 404: the user is gone. 409: the platform isn't set to Self-hosted.
+    // Retrying can't help. 400 on a user's token, or 403: the app doesn't have `activities:write` ticked,
+    // or its card isn't set up. 404: the user is gone. 409: the platform isn't set to Self-hosted.
     return { outcome: "give_up", reason: `sweatstack_${status}` };
   }
   return { outcome: "retry", reason: error instanceof Error ? `error_${error.name}` : "error_unknown" };

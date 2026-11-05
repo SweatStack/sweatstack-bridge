@@ -189,15 +189,29 @@ describe("when something fails along the way", () => {
     expect(w.sweatstack.uploads).toEqual([]);
   });
 
-  it("gets a new user token when the user's grant has grown since the cached one was minted", async () => {
+  it("relays the next file once the owner ticks activities:write, with nothing to change per user", async () => {
     await setUp({ sweatstack: { defaultScopes: [] } });
     await w.ping(w.garmin.fileReady(kari, "1001"));
     expect(w.sweatstack.uploads).toEqual([]);
 
-    const [userId] = w.sweatstack.users.keys();
-    w.sweatstack.growGrant(userId as string, ["activities:write"]);
+    w.sweatstack.defaultScopes = ["activities:write"];
     await w.ping(w.garmin.fileReady(kari, "1002"));
     expect(w.sweatstack.uploads.map((upload) => upload.externalId)).toEqual(["1002"]);
+  });
+
+  it("holds a token that can only do what the bridge does, whatever else the app ticked", async () => {
+    await setUp({ sweatstack: { defaultScopes: ["activities:write", "activities:read", "dailies:write", "offline_access"] } });
+    await w.ping(w.garmin.fileReady(kari, "1001"));
+    expect(w.sweatstack.mintedScopes).toEqual([["activities:write"]]);
+    expect(w.sweatstack.uploads).toHaveLength(1);
+  });
+
+  it("doesn't mint again on a 403 from the relay: a new token would hold the same", async () => {
+    await setUp({ intercept: (request) => (new URL(request.url).pathname.endsWith("/upload") ? new Response(null, { status: 403 }) : undefined) });
+    await w.ping(w.garmin.fileReady(kari, "1001"));
+    await nextMinute(120);
+    expect(w.sweatstack.mintedScopes).toHaveLength(1);
+    expect(w.garmin.downloads).toHaveLength(1);
   });
 
   it("gets a new user token when SweatStack stops accepting the cached one", async () => {

@@ -1,5 +1,6 @@
 import type { PlatformContext } from "../context";
 import { deriveSubject, secureEqual } from "../crypto";
+import type { QueuedEvent } from "../db";
 import { drain } from "../inbox/worker";
 
 /**
@@ -22,16 +23,20 @@ export async function webhook(c: PlatformContext): Promise<Response> {
   if (subjectKey === null) throw new Error("The database has no subject key");
 
   const now = deps.now();
-  const files = await Promise.all(
-    provider.parseWebhook(kind, body).map(async (file) => ({
-      provider: provider.name,
-      sub: await deriveSubject(subjectKey, provider.name, file.platformUserId),
-      externalId: file.externalId,
-      payload: JSON.stringify(file.reference),
-      now,
-    })),
+  const events = await Promise.all(
+    provider.parseWebhook(kind, body).map(async (event): Promise<QueuedEvent> => {
+      const about = { provider: provider.name, sub: await deriveSubject(subjectKey, provider.name, event.platformUserId), now };
+      switch (event.type) {
+        case "file":
+          return { ...about, kind: "activity_file", externalId: event.externalId, payload: JSON.stringify(event.reference) };
+        case "permissions_changed":
+          return { ...about, kind: "permissions_change" };
+        case "deregistered":
+          return { ...about, kind: "deregistration" };
+      }
+    }),
   );
-  await db.enqueueFiles(files);
+  await db.enqueueEvents(events);
 
   deps.waitUntil(drain(deps));
   return c.body(null, 200);

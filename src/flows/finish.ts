@@ -29,10 +29,13 @@ export async function declareAfterConsent(services: ConnectionServices, sub: str
   const now = deps.now();
   if (userId === null) {
     await db.enqueue({ kind: "declare", provider: provider.name, sub, nextAttemptAt: now + RETRY_AFTER_SECONDS, receivedAt: now });
-    return;
+  } else {
+    await db.wakeJobs(sub, now);
   }
-  await db.wakeJobs(sub, now);
-  deps.waitUntil(drain(deps));
+  // Behind the redirect, so the browser never waits for it, and only after that call, because it can make
+  // the user and this work may repeat it. This connection only: nobody's backlog stands in the way of the
+  // first seconds.
+  deps.waitUntil(drain(deps, { sub }));
 }
 
 /**
@@ -47,7 +50,7 @@ export async function waitForUser(services: ConnectionServices, sub: string): Pr
       if (connection === null || connection.user_id !== null) return;
       if ((await declare(services, connection)) !== null) {
         // Files may have arrived while it waited, and they shouldn't wait for the next run.
-        await drain(deps);
+        await drain(deps, { sub });
         return;
       }
       await deps.sleep(WAIT_INTERVAL_MS);

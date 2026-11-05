@@ -3,8 +3,8 @@
 How the bridge works, and how to run and change it. Start here if you're changing your own copy.
 
 **Being built.** This describes the code as it's intended to be, and some of it doesn't exist yet. So far
-there's the OpenID Provider, the sign-in and relaying activity files. Permission changes, deregistration,
-backfill, disconnect and the owner's commands come next.
+there's the OpenID Provider, the sign-in, relaying activity files and looking after a connection. Disconnect
+and the owner's commands come next.
 
 ## How it works
 
@@ -16,6 +16,29 @@ The bridge is two things that share only a user id:
 - **A client of SweatStack's public API.** The platform pings the bridge when a file is ready. The bridge
   acknowledges at once, queues the work in D1, downloads the file and uploads it to SweatStack, deduplicated
   on the platform's activity id. A cron trigger every minute handles retries.
+
+### The job queue
+
+Everything that can fail is a job in the `inbox` table, so it all gets the same retries: backing off to an
+hour, and ending after three days. A job reads the connection when it runs, so the order doesn't matter.
+
+| Kind | Added by | What it does |
+|---|---|---|
+| `activity_file` | The platform's ping | Downloads a file and uploads it as the athlete |
+| `declare` | Anything that changes a connection | Tells SweatStack what it provides now, or that it's gone |
+| `permissions_change` | The platform's webhook, or a consent where it wouldn't say yet | Asks the platform, stores the answer, declares, and adds `backfill` if newly allowed. The webhook's own list is never believed |
+| `backfill` | A consent or a permission change | Asks for one 30-day window of history, keeps its place on the row, and goes back in line for the next |
+| `deregistration` | The platform's webhook | Deletes the connection and its jobs, and adds a `declare`. With no connection (the echo of a disconnect) it does nothing. A message older than the latest consent is ignored |
+| `refresh_grant` | The cron, 30 days before a refresh token ends | Refreshes it, so a quiet athlete's grant doesn't lapse. Access tokens are refreshed only when a call needs one |
+| `expire_unclaimed` | The cron, a day after a consent with no user | Asks SweatStack once more, deregisters at the platform, deletes, and adds a `declare` |
+
+**The first seconds after a consent.** The browser's redirect waits only for the connection call. The rest runs
+behind it, for that connection only, so nobody else's backlog can delay it. A brief refusal from the platform
+is retried after 1, 2 and 4 seconds on a job's first run, and after that with the usual backoff.
+
+**History reads `ready` once every window has an answer and at least one was accepted.** The platform has no
+signal for "finished", and files keep arriving afterwards. If it accepted none, the connection stays `syncing`,
+which SweatStack ends after 24 hours, and the next consent or permission change asks again.
 
 [The contract](https://docs.sweatstack.no/learn/applications/self-hosted-integrations/) is the whole of what
 SweatStack expects from it.

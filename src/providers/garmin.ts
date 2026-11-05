@@ -6,15 +6,18 @@ import {
   type CapabilityMap,
   type ConnectionState,
   type DownloadedFile,
-  type FileReady,
+  type HistoryProgress,
   type PlatformTokens,
   type Provider,
+  type WebhookEvent,
 } from "./types";
 
 const AUTHORIZE_URL = "https://connect.garmin.com/oauth2Confirm";
 const TOKEN_URL = "https://diauth.garmin.com/di-oauth2-service/oauth/token";
 const USER_ID_URL = "https://apis.garmin.com/partner-gateway/rest/user/id";
 const PERMISSIONS_URL = "https://apis.garmin.com/partner-gateway/rest/user/permissions";
+const REGISTRATION_URL = "https://apis.garmin.com/partner-gateway/rest/user/registration";
+const BACKFILL_URL = "https://apis.garmin.com/wellness-api/rest/backfill/activities";
 
 /** The only host a bearer token is ever sent to. */
 const API_HOST = "apis.garmin.com";
@@ -34,6 +37,11 @@ const OFFERS_SETTING = "GARMIN_APP_OFFERS";
 const DEFAULT_OFFERS: readonly Capability[] = ["activities", "activity_history"];
 
 const ACTIVITY_FILES_WEBHOOK = "activity-files";
+const PERMISSIONS_WEBHOOK = "user-permissions";
+const DEREGISTRATIONS_WEBHOOK = "deregistrations";
+
+const DAY_SECONDS = 24 * 60 * 60;
+const HISTORY_WINDOW_SECONDS = 30 * DAY_SECONDS;
 
 const REQUEST_TIMEOUT_MS = 8_000;
 const DOWNLOAD_TIMEOUT_MS = 30_000;
@@ -54,6 +62,13 @@ interface ActivityFilePing {
   fileType?: unknown;
   callbackURL?: unknown;
   manual?: unknown;
+}
+
+/** Where a backfill stands: the next window ends at `end`, and the last one starts at `stop`. */
+interface HistoryCursor {
+  end: number;
+  stop: number;
+  accepted: boolean;
 }
 
 interface TokenResponse {
@@ -90,7 +105,7 @@ export function garmin(deps: Pick<Deps, "env" | "fetch" | "now">): Provider {
     name: GARMIN_NAME,
     label: "Garmin Connect",
     requiredSettings: ["GARMIN_CLIENT_ID", "GARMIN_CLIENT_SECRET"],
-    webhookKinds: [ACTIVITY_FILES_WEBHOOK],
+    webhookKinds: [ACTIVITY_FILES_WEBHOOK, PERMISSIONS_WEBHOOK, DEREGISTRATIONS_WEBHOOK],
 
     settingProblems() {
       return offerNames()
@@ -142,6 +157,7 @@ export function garmin(deps: Pick<Deps, "env" | "fetch" | "now">): Provider {
       } catch {
         return null;
       }
+      if (response.status === 401) throw new PlatformError(401);
       if (!response.ok) return null;
       const body = (await response.json().catch(() => null)) as { permissions?: unknown } | null;
       return Array.isArray(body?.permissions) ? body.permissions.map(String) : null;
@@ -179,7 +195,37 @@ export function garmin(deps: Pick<Deps, "env" | "fetch" | "now">): Provider {
       return readTokens((await response.json()) as TokenResponse, deps.now());
     },
 
-    parseWebhook(kind, body): FileReady[] {
+    async deregister(accessToken) {
+      const response = await call(REGISTRATION_URL, { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } });
+      if (!response.ok) throw new PlatformError(response.status);
+    },
+
+    mayBackfill(permissions) {
+      return offered().has("activity_history") && permissions !== null && permissions.includes(PERMISSIONS.activity_history);
+    },
+
+    async requestHistory(accessToken, cursor, days): Promise<HistoryProgress | null> {
+      const now = deps.now();
+      const position: HistoryCursor = cursor === null ? { end: now, stop: now - days * DAY_SECONDS, accepted: false } : (JSON.parse(cursor) as HistoryCursor);
+      const start = Math.max(position.end - HISTORY_WINDOW_SECONDS, position.stop);
+      const query = new URLSearchParams({ summaryStartTimeInSeconds: String(start), summaryEndTimeInSeconds: String(position.end) });
+      const { status, ok } = await bearerGet(`${BACKFILL_URL}?${query}`, accessToken);
+
+      // Right after a consent, Garmin needs a moment.
+      if (status === 403) return null;
+      const refusedThisWindow = status >= 400 && status < 500 && status !== 401 && status !== 429;
+      if (!ok && !refusedThisWindow) throw new PlatformError(status);
+      // A 409 is a duplicate, so Garmin has it. Any other refusal is about this window alone, as for one
+      // before Garmin's floor, and the rest may still be fine.
+      const accepted = position.accepted || ok || status === 409;
+      if (start <= position.stop) return { cursor: null, anyAccepted: accepted };
+      const next: HistoryCursor = { end: start - 1, stop: position.stop, accepted };
+      return { cursor: JSON.stringify(next) };
+    },
+
+    parseWebhook(kind, body): WebhookEvent[] {
+      if (kind === PERMISSIONS_WEBHOOK) return accountsIn(body, "userPermissionsChange").map((platformUserId) => ({ type: "permissions_changed", platformUserId }));
+      if (kind === DEREGISTRATIONS_WEBHOOK) return accountsIn(body, "deregistrations").map((platformUserId) => ({ type: "deregistered", platformUserId }));
       if (kind !== ACTIVITY_FILES_WEBHOOK) return [];
       const pings = (body as { activityFiles?: unknown } | null)?.activityFiles;
       if (!Array.isArray(pings)) return [];
@@ -191,7 +237,7 @@ export function garmin(deps: Pick<Deps, "env" | "fetch" | "now">): Provider {
           return [];
         }
         const reference: FileReference = { callbackUrl: callbackURL, activityId: String(activityId) };
-        return [{ platformUserId: String(userId), externalId: String(activityId), reference }];
+        return [{ type: "file" as const, platformUserId: String(userId), externalId: String(activityId), reference }];
       });
     },
 
@@ -221,6 +267,13 @@ export function garmin(deps: Pick<Deps, "env" | "fetch" | "now">): Provider {
       return { bytes: await response.arrayBuffer(), filename: `${activityId}.fit` };
     },
   };
+}
+
+/** The accounts a notification is about. The rest of it, such as a list of permissions, isn't believed. */
+function accountsIn(body: unknown, listName: string): string[] {
+  const list = (body as Record<string, unknown> | null)?.[listName];
+  if (!Array.isArray(list)) return [];
+  return (list as { userId?: unknown }[]).flatMap(({ userId }) => (typeof userId === "string" || typeof userId === "number" ? [String(userId)] : []));
 }
 
 function readTokens(body: TokenResponse, now: number): PlatformTokens {

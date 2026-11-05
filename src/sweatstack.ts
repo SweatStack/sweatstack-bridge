@@ -93,13 +93,20 @@ export async function deleteConnection(services: SweatStackServices, provider: s
   if (!response.ok) throw new SweatStackError(response.status);
 }
 
+/** All the bridge ever does as a user, so that's all a token it holds can do. */
+const USER_TOKEN_SCOPE = "activities:write";
+
 /** A token as this user, cached for its short life because each mint leaves a row at SweatStack. */
 async function userToken(services: SweatStackServices, userId: string): Promise<string> {
   const { config, db, deps } = services;
   const cached = await db.sweatstackToken(userId, deps.now() + TOKEN_EXPIRY_MARGIN_SECONDS);
   if (cached !== null) return cached;
 
-  const response = await callAsApp(services, `/api/v1/applications/${config.appId}/users/${userId}/token`, { method: "POST" });
+  const response = await callAsApp(services, `/api/v1/applications/${config.appId}/users/${userId}/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scope: USER_TOKEN_SCOPE }),
+  });
   if (!response.ok) throw new SweatStackError(response.status);
   const { access_token: accessToken, expires_in: expiresIn } = (await response.json()) as { access_token: string; expires_in: number };
   await db.saveSweatstackToken(userId, accessToken, deps.now() + expiresIn);
@@ -128,10 +135,10 @@ export async function uploadActivityFile(
     );
   };
 
-  // A cached token can be out of date both ways: gone bad (401), or minted before the user's grant grew
-  // (403). A new one settles which, and a second refusal is the real answer.
+  // A cached token can have gone bad, and a new one settles that. A 403 can't be fixed that way: the token
+  // was minted to hold the one scope an upload needs.
   let response = await attempt();
-  if (response.status === 401 || response.status === 403) {
+  if (response.status === 401) {
     await services.db.deleteSweatstackToken(upload.userId);
     response = await attempt();
   }

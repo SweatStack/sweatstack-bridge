@@ -28,11 +28,12 @@ export async function platformCallback(c: PlatformContext): Promise<Response> {
   try {
     const tokens = await provider.exchangeCode({ code, codeVerifier: flow.platform_verifier, redirectUri: callbackUrl });
     const platformUserId = await provider.identify(tokens.accessToken);
-    const permissions = await provider.fetchPermissions(tokens.accessToken);
+    const permissions = await provider.fetchPermissions(tokens.accessToken).catch(() => null);
     const subjectKey = await db.meta("subject_key");
     if (subjectKey === null) throw new Error("The database has no subject key");
     const sub = await deriveSubject(subjectKey, provider.name, platformUserId);
-    await db.saveConsent({ sub, provider: provider.name, rpState: flow.rp_state, ...tokens, permissions, consentedAt: deps.now() });
+    const followUps = permissions === null ? (["permissions_change"] as const) : provider.mayBackfill(permissions) ? (["backfill"] as const) : [];
+    await db.saveConsent({ sub, provider: provider.name, rpState: flow.rp_state, ...tokens, permissions, consentedAt: deps.now() }, [...followUps]);
     await declareAfterConsent({ config, db, deps, provider }, sub);
     await db.issueCode(flow.id, await hashSecret(issued), sub, deps.now() + CODE_LIFETIME_SECONDS);
   } catch (failure) {

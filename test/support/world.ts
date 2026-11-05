@@ -36,6 +36,8 @@ export interface WorldOptions {
   sweatstack?: FakeSweatStackOptions;
   /** Settings on top of the complete ones. */
   settings?: Record<string, string>;
+  /** The same Garmin as another world's, for a test of a change of settings. */
+  garmin?: FakeGarmin;
   /** Answers a call instead of the fake, for a test of a bad moment at SweatStack. Undefined lets it through. */
   intercept?: (request: Request) => Response | undefined | Promise<Response | undefined>;
 }
@@ -49,10 +51,10 @@ export interface Client {
  * The bridge between a fake SweatStack and a fake Garmin, and SweatStack's side of a sign-in: the same
  * requests and the same checks as its relying party.
  */
-export function world({ sweatstack: sweatstackOptions, settings: extraSettings, intercept }: WorldOptions = {}) {
+export function world({ sweatstack: sweatstackOptions, settings: extraSettings, garmin: sharedGarmin, intercept }: WorldOptions = {}) {
   const clock = { now: 1_800_000_000 };
   const sweatstack = new FakeSweatStack({ now: () => clock.now, ...sweatstackOptions });
-  const garmin = new FakeGarmin();
+  const garmin = sharedGarmin ?? new FakeGarmin();
   const settings = {
     SWEATSTACK_URL: sweatstack.url,
     SWEATSTACK_APP_ID: sweatstack.appId,
@@ -155,6 +157,13 @@ export function world({ sweatstack: sweatstackOptions, settings: extraSettings, 
     return response;
   };
 
+  /** Garmin posting to a webhook that isn't about a file, and everything it set off. */
+  const notify = async (kind: "user-permissions" | "deregistrations", body: unknown) => {
+    const response = await webhook(kind, body);
+    await settled();
+    return response;
+  };
+
   /** One run of the cron. */
   const cron = async () => {
     await sweep(deps);
@@ -205,7 +214,7 @@ export function world({ sweatstack: sweatstackOptions, settings: extraSettings, 
     return { ...flow, claims, sub: claims.sub as string };
   };
 
-  return { sweatstack, garmin, clock, hooks, sleeps, foreignCalls, webhook, ping, cron, request, discoveryPath, postRegistration, register, authorize, exchange, consent, signIn, settled, verifyIdToken };
+  return { sweatstack, garmin, clock, hooks, sleeps, foreignCalls, webhook, ping, notify, cron, request, discoveryPath, postRegistration, register, authorize, exchange, consent, signIn, settled, verifyIdToken };
 }
 
 export function pathOf(url: string): string {

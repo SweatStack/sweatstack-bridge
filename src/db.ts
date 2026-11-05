@@ -54,7 +54,7 @@ export interface Consent {
 
 export type MetaKey = "webhook_secret" | "subject_key" | "signing_key";
 
-export type JobKind = "activity_file" | "declare";
+export type JobKind = "activity_file" | "declare" | "permissions_change" | "backfill" | "deregistration" | "refresh_grant" | "expire_unclaimed";
 
 export interface JobRow {
   id: number;
@@ -70,6 +70,21 @@ export interface JobRow {
   done_at: number | null;
   received_at: number;
 }
+
+/** One thing a webhook said, ready to queue. */
+export type QueuedEvent =
+  | { kind: "activity_file"; provider: string; sub: string; externalId: string; payload: string; now: number }
+  | { kind: "permissions_change" | "deregistration"; provider: string; sub: string; now: number };
+
+/** The next run carries on, so a day when everyone is due can't become one enormous statement. */
+const MAX_DUE_PER_RUN = 100;
+
+/**
+ * Whether a job the sweeper adds can be added for connection `c` (`?3` is the cutoff): not while one is
+ * waiting, and not soon after one finished. Otherwise a job that gives up would start again the next minute.
+ */
+const NOT_RECENTLY_TRIED = (kind: JobKind) =>
+  `NOT EXISTS (SELECT 1 FROM inbox i WHERE i.kind = '${kind}' AND i.sub = c.sub AND (i.done_at IS NULL OR i.done_at > ?3))`;
 
 export class Database {
   constructor(private readonly d1: D1Database) {}
@@ -158,10 +173,11 @@ export class Database {
 
   /**
    * Stores a consent. For an account the bridge knows, the new tokens win, and clearing the refresh claim
-   * makes any refresh still in flight unable to write over them.
+   * makes any refresh still in flight unable to write over them. What the consent still needs done goes
+   * in with it, so it can't be lost, and it's due now even if an earlier try was backing off.
    */
-  async saveConsent(consent: Consent): Promise<void> {
-    await this.d1
+  async saveConsent(consent: Consent, followUps: ("permissions_change" | "backfill")[]): Promise<void> {
+    const saved = this.d1
       .prepare(
         `INSERT INTO connections
            (sub, provider, rp_state, access_token, refresh_token, access_expires_at, refresh_expires_at, permissions, consented_at)
@@ -180,8 +196,59 @@ export class Database {
       .bind(
         consent.sub, consent.provider, consent.rpState, consent.accessToken, consent.refreshToken, consent.accessExpiresAt,
         consent.refreshExpiresAt, consent.permissions === null ? null : JSON.stringify(consent.permissions), consent.consentedAt,
-      )
-      .run();
+      );
+    const due = this.d1
+      .prepare("UPDATE inbox SET next_attempt_at = ?, attempts = 0 WHERE sub = ? AND kind IN ('permissions_change', 'backfill') AND done_at IS NULL AND lease_until IS NULL")
+      .bind(consent.consentedAt, consent.sub);
+    await this.d1.batch([saved, due, ...followUps.map((kind) => this.enqueueOnce(kind, consent.sub, consent.consentedAt))]);
+  }
+
+  /** What the platform answered, with what follows from it, together. */
+  async savePermissions(sub: string, provider: string, permissions: string[], { backfill }: { backfill: boolean }, now: number): Promise<void> {
+    await this.d1.batch([
+      this.d1.prepare("UPDATE connections SET permissions = ? WHERE sub = ?").bind(JSON.stringify(permissions), sub),
+      this.enqueueStatement({ kind: "declare", provider, sub, nextAttemptAt: now, receivedAt: now }),
+      ...(backfill ? [this.enqueueOnce("backfill", sub, now)] : []),
+    ]);
+  }
+
+  async saveBackfillCursor(sub: string, cursor: string | null): Promise<void> {
+    await this.d1.prepare("UPDATE connections SET backfill_cursor = ? WHERE sub = ?").bind(cursor, sub).run();
+  }
+
+  /** Marked together with telling SweatStack, so `syncing` can't outlive it by accident. */
+  async finishBackfill(sub: string, provider: string, now: number): Promise<void> {
+    await this.d1.batch([
+      this.d1.prepare("UPDATE connections SET backfill_cursor = NULL, backfill_done_at = ? WHERE sub = ?").bind(now, sub),
+      this.enqueueStatement({ kind: "declare", provider, sub, nextAttemptAt: now, receivedAt: now }),
+    ]);
+  }
+
+  /** The platform says it's over. A consent newer than that message stands. */
+  forgetDeregistered(sub: string, provider: string, receivedAt: number, now: number): Promise<void> {
+    return this.forget(this.d1.prepare("DELETE FROM connections WHERE sub = ? AND consented_at < ?").bind(sub, receivedAt), sub, provider, now);
+  }
+
+  /** Nobody claimed it. A new consent, or a user named at the last moment, keeps it. */
+  forgetUnclaimed(sub: string, provider: string, consentedAt: number, now: number): Promise<void> {
+    return this.forget(this.d1.prepare("DELETE FROM connections WHERE sub = ? AND consented_at = ? AND user_id IS NULL").bind(sub, consentedAt), sub, provider, now);
+  }
+
+  /**
+   * Deletes a connection and its jobs, and queues telling SweatStack. It all happens only if the row went:
+   * one that was kept keeps its jobs, and SweatStack has nothing to hear.
+   */
+  private async forget(deleteRow: D1PreparedStatement, sub: string, provider: string, now: number): Promise<void> {
+    await this.d1.batch([
+      deleteRow,
+      this.d1.prepare("DELETE FROM inbox WHERE sub = ?1 AND NOT EXISTS (SELECT 1 FROM connections WHERE sub = ?1)").bind(sub),
+      this.d1
+        .prepare(
+          `INSERT INTO inbox (kind, provider, sub, next_attempt_at, received_at)
+           SELECT 'declare', ?1, ?2, ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM connections WHERE sub = ?2)`,
+        )
+        .bind(provider, sub, now),
+    ]);
   }
 
   /** Whatever was waiting on this connection is due now: a new consent may be what it needed. */
@@ -262,19 +329,22 @@ export class Database {
     await this.d1.prepare("DELETE FROM tokens WHERE holder = ?").bind(holder).run();
   }
 
-  /** One atomic statement: two runs can never claim the same job. */
-  claimJob(now: number, leaseUntil: number): Promise<JobRow | null> {
+  /**
+   * One atomic statement: two runs can never claim the same job. With a `sub`, only that connection's
+   * jobs, so someone connecting doesn't wait behind everyone else's backlog.
+   */
+  claimJob(now: number, leaseUntil: number, sub: string | null): Promise<JobRow | null> {
     return this.d1
       .prepare(
         `UPDATE inbox SET lease_until = ?1, attempts = attempts + 1
          WHERE id = (
            SELECT id FROM inbox
-           WHERE done_at IS NULL AND next_attempt_at <= ?2 AND (lease_until IS NULL OR lease_until <= ?2)
+           WHERE done_at IS NULL AND next_attempt_at <= ?2 AND (lease_until IS NULL OR lease_until <= ?2) AND (?3 IS NULL OR sub = ?3)
            ORDER BY next_attempt_at, id LIMIT 1
          )
          RETURNING *`,
       )
-      .bind(leaseUntil, now)
+      .bind(leaseUntil, now, sub)
       .first<JobRow>();
   }
 
@@ -293,30 +363,65 @@ export class Database {
       .run();
   }
 
-  /** A repeated ping about the same file adds nothing. */
-  async enqueueFiles(files: { provider: string; sub: string; externalId: string; payload: string; now: number }[]): Promise<void> {
-    if (files.length === 0) return;
+  /** A job with more to do goes straight back in line, and its next stretch starts with a clean slate. */
+  async continueJob(id: number, now: number): Promise<void> {
+    await this.d1.prepare("UPDATE inbox SET next_attempt_at = ?, attempts = 0, last_error = NULL, lease_until = NULL WHERE id = ?").bind(now, id).run();
+  }
+
+  /** What webhooks said. A repeated ping about the same file adds nothing. */
+  async enqueueEvents(events: QueuedEvent[]): Promise<void> {
+    if (events.length === 0) return;
     await this.d1.batch(
-      files.map((file) =>
-        this.d1
-          .prepare(
-            `INSERT INTO inbox (kind, provider, sub, external_id, payload, next_attempt_at, received_at)
-             VALUES ('activity_file', ?1, ?2, ?3, ?4, ?5, ?5)
-             ON CONFLICT (kind, sub, external_id) DO NOTHING`,
-          )
-          .bind(file.provider, file.sub, file.externalId, file.payload, file.now),
+      events.map((event) =>
+        event.kind === "activity_file"
+          ? this.d1
+              .prepare(
+                `INSERT INTO inbox (kind, provider, sub, external_id, payload, next_attempt_at, received_at)
+                 VALUES ('activity_file', ?1, ?2, ?3, ?4, ?5, ?5)
+                 ON CONFLICT (kind, sub, external_id) DO NOTHING`,
+              )
+              .bind(event.provider, event.sub, event.externalId, event.payload, event.now)
+          : this.enqueueStatement({ kind: event.kind, provider: event.provider, sub: event.sub, nextAttemptAt: event.now, receivedAt: event.now }),
       ),
     );
   }
 
-  async enqueueDeclareForAll(provider: string, now: number): Promise<void> {
+  /** Quiet connections whose grant is near its end. Writes nothing when none are. */
+  async enqueueDueRefreshes(refreshBefore: number, now: number, triedSince: number): Promise<void> {
     await this.d1
       .prepare(
         `INSERT INTO inbox (kind, provider, sub, next_attempt_at, received_at)
-         SELECT 'declare', provider, sub, ?1, ?1 FROM connections WHERE provider = ?2`,
+         SELECT 'refresh_grant', c.provider, c.sub, ?1, ?1 FROM connections c
+         WHERE c.refresh_expires_at <= ?2 AND c.needs_reconnect = 0 AND ${NOT_RECENTLY_TRIED("refresh_grant")}
+         LIMIT ${MAX_DUE_PER_RUN}`,
       )
-      .bind(now, provider)
+      .bind(now, refreshBefore, triedSince)
       .run();
+  }
+
+  /** Connections that have had their day. Writes nothing when none have. */
+  async enqueueUnclaimed(consentedBefore: number, now: number, triedSince: number): Promise<void> {
+    await this.d1
+      .prepare(
+        `INSERT INTO inbox (kind, provider, sub, next_attempt_at, received_at)
+         SELECT 'expire_unclaimed', c.provider, c.sub, ?1, ?1 FROM connections c
+         WHERE c.user_id IS NULL AND c.consented_at <= ?2 AND ${NOT_RECENTLY_TRIED("expire_unclaimed")}
+         LIMIT ${MAX_DUE_PER_RUN}`,
+      )
+      .bind(now, consentedBefore, triedSince)
+      .run();
+  }
+
+  /** What a platform app offers has changed, so what every connection provides, or could, may have too. */
+  async enqueueRecheckForAll(provider: string, now: number): Promise<void> {
+    const enqueueForAll = (kind: JobKind) =>
+      this.d1
+        .prepare(
+          `INSERT INTO inbox (kind, provider, sub, next_attempt_at, received_at)
+           SELECT ?1, provider, sub, ?2, ?2 FROM connections WHERE provider = ?3`,
+        )
+        .bind(kind, now, provider);
+    await this.d1.batch([enqueueForAll("declare"), enqueueForAll("permissions_change")]);
   }
 
   /** Deletes what's over. Each statement touches nothing when there's nothing to delete. */
@@ -329,9 +434,24 @@ export class Database {
   }
 
   async enqueue(job: { kind: JobKind; provider: string; sub: string; nextAttemptAt: number; receivedAt: number }): Promise<void> {
-    await this.d1
+    await this.enqueueStatement(job).run();
+  }
+
+  private enqueueStatement(job: { kind: JobKind; provider: string; sub: string; nextAttemptAt: number; receivedAt: number }): D1PreparedStatement {
+    return this.d1
       .prepare("INSERT INTO inbox (kind, provider, sub, next_attempt_at, received_at) VALUES (?, ?, ?, ?, ?)")
-      .bind(job.kind, job.provider, job.sub, job.nextAttemptAt, job.receivedAt)
-      .run();
+      .bind(job.kind, job.provider, job.sub, job.nextAttemptAt, job.receivedAt);
+  }
+
+  /** Adds a job unless one is already waiting, and adds no backfill for a connection that's had it. */
+  private enqueueOnce(kind: "permissions_change" | "backfill", sub: string, now: number): D1PreparedStatement {
+    return this.d1
+      .prepare(
+        `INSERT INTO inbox (kind, provider, sub, next_attempt_at, received_at)
+         SELECT ?1, c.provider, c.sub, ?2, ?2 FROM connections c
+         WHERE c.sub = ?3 AND (?1 <> 'backfill' OR c.backfill_done_at IS NULL)
+           AND NOT EXISTS (SELECT 1 FROM inbox i WHERE i.kind = ?1 AND i.sub = c.sub AND i.done_at IS NULL)`,
+      )
+      .bind(kind, now, sub);
   }
 }

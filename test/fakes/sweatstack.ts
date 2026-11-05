@@ -15,7 +15,7 @@ export interface FakeSweatStackOptions {
   selfHosted?: boolean;
   /** Whether the card names an issuer, which the connection call by subject needs. */
   hasIssuer?: boolean;
-  /** The app's default scopes. A new user gets a copy, and keeps it when the app's change later. */
+  /** The app's default scopes: what a token for one of its users may hold, read when it's minted. */
   defaultScopes?: string[];
   /** The current time in seconds since the epoch. */
   now?: () => number;
@@ -77,12 +77,15 @@ export class FakeSweatStack {
   readonly declarations = new Map<string, Declaration>();
   /** From the connection call, by subject. */
   readonly connections = new Map<string, Connection>();
+  /** Every scope a user's token was minted with, in order. */
+  readonly mintedScopes: string[][] = [];
+  /** What each connection call said, in order, for a test of how a connection's state changed. */
+  readonly connectionCalls: { subject: string; capabilities: Record<string, string> }[] = [];
   /** Subject to user. Outlives a disconnect, so the same platform account is the same user. */
   readonly identities = new Map<string, string>();
 
   private readonly app = new Hono();
   private readonly tokens = new Map<string, Issued>();
-  private readonly grants = new Map<string, string[]>();
   private readonly flows = new Map<string, StartedBy>();
   private readonly sources = new Map<string, string>();
   private signingKey?: Promise<{ privateKey: CryptoKey; publicJwk: JWK }>;
@@ -137,11 +140,6 @@ export class FakeSweatStack {
     return "linked";
   }
 
-  /** A sign-in asking for more than the user's grant holds, which grows it. */
-  growGrant(userId: string, scopes: string[]): void {
-    this.grants.set(userId, [...(this.grants.get(userId) ?? []), ...scopes]);
-  }
-
   createUser(fields: Partial<FakeUser>): FakeUser {
     const user: FakeUser = {
       id: this.id("user"),
@@ -153,7 +151,6 @@ export class FakeSweatStack {
       registered_at: new Date(0).toISOString(),
     };
     this.users.set(user.id, user);
-    this.grants.set(user.id, [...this.defaultScopes]);
     return user;
   }
 
@@ -241,12 +238,18 @@ export class FakeSweatStack {
       return c.json(this.createUser(body), 201);
     });
 
-    app.post(`${users}/:user/token`, (c) => {
+    app.post(`${users}/:user/token`, async (c) => {
       const refused = this.refuseUnlessClient(c);
       if (refused) return refused;
       const user = this.users.get(c.req.param("user"));
       if (!user) return c.json(NOT_FOUND, 404);
-      return c.json(this.issue({ sub: user.id, client: false, scopes: this.grants.get(user.id) ?? [] }));
+      const body = await c.req.json<{ scope?: string | null }>().catch(() => null);
+      const asked = body?.scope?.split(" ").filter(Boolean) ?? [];
+      const mintable = this.defaultScopes.filter((scope) => scope !== "offline_access");
+      if (asked.some((scope) => !mintable.includes(scope))) return c.json({ detail: "Those scopes cannot be in this token." }, 400);
+      const scopes = asked.length > 0 ? asked : mintable;
+      this.mintedScopes.push(scopes);
+      return c.json(this.issue({ sub: user.id, client: false, scopes }));
     });
 
     app.delete(`${users}/:user`, (c) => {
@@ -300,6 +303,7 @@ export class FakeSweatStack {
         userId = this.createUser({}).id;
         this.identities.set(subject, userId);
       }
+      this.connectionCalls.push({ subject, capabilities });
       const existing = this.connections.get(subject);
       this.connections.set(subject, {
         userId,

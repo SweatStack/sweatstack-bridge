@@ -10,6 +10,9 @@ import { ALL_PERMISSIONS, resetDatabase, world, type Client } from "../support/w
 const kari = { userId: "garmin-kari", permissions: ALL_PERMISSIONS };
 const DAY = 24 * 60 * 60;
 
+/** An app with no history on offer, so a consent leaves nothing running behind it to race with these tests. */
+const filesOnly = { settings: { GARMIN_APP_OFFERS: "activities" } };
+
 const db = new Database(env.DB);
 const row = async (sub: string) => (await db.connection(sub)) as ConnectionRow;
 const jobs = async () => (await env.DB.prepare("SELECT * FROM inbox ORDER BY id").all<Record<string, unknown>>()).results;
@@ -37,7 +40,7 @@ describe("access tokens", () => {
 
   beforeEach(async () => {
     await resetDatabase({ withSigningKey: true });
-    w = world();
+    w = world(filesOnly);
     client = await w.register();
     ({ sub } = await w.signIn(client, kari));
   });
@@ -129,7 +132,7 @@ describe("access tokens", () => {
 describe("a download with a token the platform has stopped accepting", () => {
   it("refreshes once and tries again", async () => {
     await resetDatabase({ withSigningKey: true });
-    const w = world();
+    const w = world(filesOnly);
     await w.signIn(await w.register(), kari);
     w.garmin.invalidateAccessTokens();
     await w.ping(w.garmin.fileReady(kari, "1001"));
@@ -141,7 +144,7 @@ describe("a download with a token the platform has stopped accepting", () => {
 describe("after a reconnect", () => {
   it("relays what waited, without waiting out its backoff", async () => {
     await resetDatabase({ withSigningKey: true });
-    const w = world();
+    const w = world(filesOnly);
     const client = await w.register();
     await w.signIn(client, kari);
     w.garmin.revokeEverything();
@@ -160,7 +163,7 @@ describe("the job queue", () => {
 
   beforeEach(async () => {
     await resetDatabase({ withSigningKey: true });
-    w = world();
+    w = world(filesOnly);
     await w.signIn(await w.register(), kari);
   });
 

@@ -86,7 +86,7 @@ describe("the fake's federation", () => {
 });
 
 describe("the fake's scopes", () => {
-  const relay = async (fake: FakeSweatStack, userId: string) => {
+  const mint = async (fake: FakeSweatStack, userId: string, scope?: string) => {
     const basic = `Basic ${btoa(`${fake.appId}:${fake.clientSecret}`)}`;
     const client = await fake.fetch(
       new Request(`${fake.url}/api/v1/oauth/token`, {
@@ -96,13 +96,17 @@ describe("the fake's scopes", () => {
       }),
     );
     const { access_token: clientToken } = (await client.json()) as { access_token: string };
-    const mint = await fake.fetch(
+    return fake.fetch(
       new Request(`${fake.url}/api/v1/applications/${fake.appId}/users/${userId}/token`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${clientToken}` },
+        headers: { Authorization: `Bearer ${clientToken}`, "Content-Type": "application/json" },
+        ...(scope === undefined ? {} : { body: JSON.stringify({ scope }) }),
       }),
     );
-    const { access_token: userToken } = (await mint.json()) as { access_token: string };
+  };
+
+  const relay = async (fake: FakeSweatStack, userId: string) => {
+    const { access_token: userToken } = (await (await mint(fake, userId)).json()) as { access_token: string };
     const form = new FormData();
     form.append("files", new File([new Uint8Array([0])], "a.fit"));
     return fake.fetch(
@@ -114,14 +118,24 @@ describe("the fake's scopes", () => {
     );
   };
 
-  it("refuses a relay without activities:write, and a user keeps the scopes it was created with", async () => {
+  it("refuses a relay without activities:write, and a change of the app's scopes reaches a user at the next token", async () => {
     const fake = new FakeSweatStack({ defaultScopes: [] });
     const early = fake.createUser({});
     expect((await relay(fake, early.id)).status).toBe(403);
 
     fake.defaultScopes = ["activities:write"];
-    expect((await relay(fake, early.id)).status).toBe(403);
-    expect((await relay(fake, fake.createUser({}).id)).status).toBe(202);
+    expect((await relay(fake, early.id)).status).toBe(202);
+  });
+
+  it("mints a part of the app's scopes on request, never more, and never offline_access", async () => {
+    const fake = new FakeSweatStack({ defaultScopes: ["activities:write", "activities:read", "offline_access"] });
+    const { id } = fake.createUser({});
+    expect((await mint(fake, id, "activities:write")).status).toBe(200);
+    expect(fake.mintedScopes.at(-1)).toEqual(["activities:write"]);
+    expect((await mint(fake, id)).status).toBe(200);
+    expect(fake.mintedScopes.at(-1)).toEqual(["activities:write", "activities:read"]);
+    expect((await mint(fake, id, "sharing:write")).status).toBe(400);
+    expect((await mint(fake, id, "offline_access")).status).toBe(400);
   });
 });
 

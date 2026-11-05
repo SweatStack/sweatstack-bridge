@@ -51,8 +51,9 @@ describe("what the bridge stores", () => {
   });
 
   it("stores unknown permissions as unknown, not as none", async () => {
-    w.garmin.failures.permissions.push(403);
+    w.garmin.failures.permissions.push(...Array<number>(5).fill(403));
     const { sub } = await w.signIn(client, kari);
+    await w.settled();
     expect((await connection(sub))?.permissions).toBeNull();
   });
 
@@ -84,14 +85,17 @@ describe("what the bridge stores", () => {
 describe("what's left for the job", () => {
   beforeEach(() => resetDatabase({ withSigningKey: true }));
 
+  /** An app with no history on offer, so a consent asks for nothing else. */
+  const filesOnly = { settings: { GARMIN_APP_OFFERS: "activities" } };
+
   it("adds nothing when the user is known at once", async () => {
-    const w = world();
+    const w = world(filesOnly);
     await w.signIn(await w.register(), kari);
     expect((await jobs()).results).toEqual([]);
   });
 
   it("adds a declare job while a connection waits for its user", async () => {
-    const w = world();
+    const w = world(filesOnly);
     const client = await w.register();
     const user = w.sweatstack.createUser({});
     const { sub } = await w.signIn(client, kari, { startedBy: user.id });
@@ -99,7 +103,7 @@ describe("what's left for the job", () => {
   });
 
   it("adds a declare job when the connection call fails", async () => {
-    const w = world({ intercept: (request) => (request.method === "PUT" ? new Response(null, { status: 503 }) : undefined) });
+    const w = world({ ...filesOnly, intercept: (request) => (request.method === "PUT" ? new Response(null, { status: 503 }) : undefined) });
     const { sub } = await w.signIn(await w.register(), kari);
     expect((await jobs()).results).toEqual([{ kind: "declare", sub, next_attempt_at: w.clock.now + 60 }]);
   });

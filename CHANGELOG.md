@@ -7,4 +7,6 @@ them.
 
 Not usable yet. The OpenID Provider and the sign-in, on Garmin: discovery, keys, registration, the
 authorization code flow, and the connection call. Activity files are relayed, with retries and token refresh.
-Permission changes, deregistration, backfill and disconnect are still to come.
+Connections are looked after: permission changes, deregistration, history, the refresh of a quiet athlete's
+grant, and the removal of a connection nobody claims within a day. A user's token now asks for
+`activities:write` and nothing else. Disconnect is still to come.

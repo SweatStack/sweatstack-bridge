@@ -7,7 +7,7 @@ import { beforeAll, describe, expect, it } from "vitest";
  * the management API, declared connections and the upload relay.
  *
  * Safe to repeat against a real test app: it replaces its one test user, found by its reference, at
- * the start of each run. A user keeps the scopes it was created with, so a kept one could go stale.
+ * the start of each run.
  */
 export interface Target {
   url: string;
@@ -58,6 +58,9 @@ export function checks(name: string, target: () => Target): void {
         body: JSON.stringify({ external_reference: REFERENCE }),
       });
 
+    const mint = (token: string, body: object) =>
+      t.fetch(`${users()}/${userId}/token`, { method: "POST", headers: bearer(token, { "Content-Type": "application/json" }), body: JSON.stringify(body) });
+
     const upload = (token: string) => {
       const form = new FormData();
       form.append("files", new File([new Uint8Array([0])], "fake-check.fit"));
@@ -76,7 +79,7 @@ export function checks(name: string, target: () => Target): void {
       ({ id: userId } = await setup<{ id: string }>("the test user", await createUser()));
       ({ access_token: userToken } = await setup<{ access_token: string }>(
         "a token for the test user",
-        await t.fetch(`${users()}/${userId}/token`, { method: "POST", headers: bearer(clientToken) }),
+        await mint(clientToken, { scope: "activities:write" }),
       ));
     });
 
@@ -106,6 +109,16 @@ export function checks(name: string, target: () => Target): void {
       const body = (await response.json()) as Record<string, unknown>;
       expect(body).toMatchObject({ access_token: expect.any(String), expires_in: expect.any(Number) });
       expect(body.refresh_token ?? null).toBeNull();
+    });
+
+    it("mints a token holding only the scope it was asked for, from the user's first moment", async () => {
+      const response = await mint(clientToken, { scope: "activities:write" });
+      await expectStatus(response, 200);
+      expect(await response.json()).toMatchObject({ access_token: expect.any(String) });
+    });
+
+    it("refuses a token holding more than the app's default scopes", async () => {
+      expect((await mint(clientToken, { scope: "offline_access" })).status).toBe(400);
     });
 
     it("answers 404 for a user it doesn't know", async () => {

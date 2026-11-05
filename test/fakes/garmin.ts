@@ -31,6 +31,9 @@ interface PendingCode {
 const TOKEN_LIFETIME_SECONDS = 24 * 60 * 60;
 const REFRESH_LIFETIME_SECONDS = 90 * 24 * 60 * 60;
 
+/** Garmin allows up to about 100 days per backfill request. */
+const LONGEST_BACKFILL_SECONDS = 100 * 24 * 60 * 60;
+
 export const GARMIN_HOSTS = ["connect.garmin.com", "diauth.garmin.com", "apis.garmin.com"] as const;
 
 export class FakeGarmin {
@@ -38,10 +41,25 @@ export class FakeGarmin {
   readonly clientSecret: string;
 
   /** Answers these instead of the real thing, one per call, for a test of a bad moment at Garmin. */
-  readonly failures = { token: [] as number[], userId: [] as number[], permissions: [] as number[], file: [] as number[] };
+  readonly failures = {
+    token: [] as number[],
+    userId: [] as number[],
+    permissions: [] as number[],
+    file: [] as number[],
+    backfill: [] as number[],
+    registration: [] as number[],
+  };
   /** Every refresh request that reached Garmin. */
   readonly refreshes: string[] = [];
   readonly downloads: string[] = [];
+  /** Every backfill request Garmin answered with a yes. */
+  readonly backfills: { userId: string; start: number; end: number }[] = [];
+  /** Every backfill request that reached Garmin, whatever the answer. */
+  readonly backfillRequests: { start: number; end: number }[] = [];
+  /** Accounts deregistered through `DELETE .../user/registration`. */
+  readonly deregistered: string[] = [];
+  /** While set, backfill requests wait for it: a test's way of holding Garmin up. */
+  backfillGate: Promise<void> | undefined;
 
   private readonly app = new Hono();
   private readonly codes = new Map<string, PendingCode>();
@@ -97,6 +115,16 @@ export class FakeGarmin {
       callbackURL: `https://apis.garmin.com/wellness-api/rest/activityFile?id=${activityId}&token=${token}`,
       ...overrides,
     };
+  }
+
+  /** The body Garmin posts when a person changes what they share. The bridge must not believe its list. */
+  permissionsChanged(account: Account, permissions: string[] = account.permissions) {
+    return { userPermissionsChange: [{ userId: account.userId, summaryId: `${account.userId}-permissions`, permissions }] };
+  }
+
+  /** The body Garmin posts when a person disconnects, or echoes after `DELETE .../user/registration`. */
+  deregistration(account: Account) {
+    return { deregistrations: [{ userId: account.userId }] };
   }
 
   /** Access tokens stop working now, whatever their expiry said. Refresh tokens carry on. */
@@ -177,6 +205,41 @@ export class FakeGarmin {
       if (failure !== undefined) return c.body(null, failure as 500);
       const account = this.bearer(c.req.header("Authorization"));
       return account ? c.json({ permissions: account.permissions }) : c.body(null, 401);
+    });
+
+    this.backfillRoute();
+    this.registrationRoute();
+  }
+
+  private backfillRoute(): void {
+    this.app.get("/wellness-api/rest/backfill/activities", async (c) => {
+      const start = Number(c.req.query("summaryStartTimeInSeconds"));
+      const end = Number(c.req.query("summaryEndTimeInSeconds"));
+      this.backfillRequests.push({ start, end });
+      await this.backfillGate;
+      const failure = this.failures.backfill.shift();
+      if (failure !== undefined) return c.body(null, failure as 500);
+      const account = this.bearer(c.req.header("Authorization"));
+      if (!account) return c.body(null, 401);
+      if (!account.permissions.includes("HISTORICAL_DATA_EXPORT")) return c.text("Access denied, required HISTORICAL_DATA_EXPORT", 412);
+      if (!Number.isInteger(start) || !Number.isInteger(end) || start > end || end - start > LONGEST_BACKFILL_SECONDS) return c.body(null, 400);
+      if (this.backfills.some((window) => window.userId === account.userId && window.start === start && window.end === end)) return c.body(null, 409);
+      this.backfills.push({ userId: account.userId, start, end });
+      return c.body(null, 202);
+    });
+  }
+
+  private registrationRoute(): void {
+    this.app.delete("/partner-gateway/rest/user/registration", (c) => {
+      const failure = this.failures.registration.shift();
+      if (failure !== undefined) return c.body(null, failure as 500);
+      const header = c.req.header("Authorization") ?? "";
+      const account = this.bearer(header);
+      if (!account) return c.body(null, 401);
+      this.deregistered.push(account.userId);
+      const grant = this.accessTokens.get(header.slice("Bearer ".length)) as Grant;
+      grant.revoked = true;
+      return c.body(null, 204);
     });
   }
 
