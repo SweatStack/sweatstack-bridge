@@ -1,5 +1,6 @@
 import { env } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createApp } from "../../src/app";
 import { ALL_PERMISSIONS, resetDatabase, world, type Client } from "../support/world";
 
 const kari = { userId: "garmin-kari", permissions: ALL_PERMISSIONS };
@@ -101,6 +102,49 @@ describe("what's left for the job", () => {
     const w = world({ intercept: (request) => (request.method === "PUT" ? new Response(null, { status: 503 }) : undefined) });
     const { sub } = await w.signIn(await w.register(), kari);
     expect((await jobs()).results).toEqual([{ kind: "declare", sub, next_attempt_at: w.clock.now + 60 }]);
+  });
+});
+
+describe("when a request fails", () => {
+  const failing = (message: string) => {
+    const bridgeEnv = {
+      SWEATSTACK_URL: "https://sweatstack.test",
+      SWEATSTACK_APP_ID: "app",
+      SWEATSTACK_CLIENT_SECRET: "secret",
+      GARMIN_CLIENT_ID: "id",
+      GARMIN_CLIENT_SECRET: "secret",
+      DB: {
+        prepare: () => {
+          throw new Error(message);
+        },
+      } as unknown as D1Database,
+    };
+    const app = createApp({ env: bridgeEnv, fetch: () => Promise.reject(new Error("no network")), now: () => 0, sleep: async () => {}, waitUntil: () => {} });
+    return app.request("https://bridge.test/oidc/garmin_connect/authorize", undefined, bridgeEnv);
+  };
+
+  const logged = async (message: string) => {
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      expect((await failing(message)).status).toBe(500);
+      return String(spy.mock.calls[0]?.[0]);
+    } finally {
+      spy.mockRestore();
+    }
+  };
+
+  it("logs the route and a database's reason", async () => {
+    const line = await logged("D1_ERROR: table flows has no column named x: SQLITE_ERROR");
+    expect(JSON.parse(line)).toEqual({
+      event: "request_failed",
+      error: "Error",
+      route: "/oidc/:provider/authorize",
+      detail: "D1_ERROR: table flows has no column named x: SQLITE_ERROR",
+    });
+  });
+
+  it("doesn't log any other message, which could carry a URL or a token", async () => {
+    expect(await logged("Bearer a-secret-token")).not.toContain("a-secret-token");
   });
 });
 

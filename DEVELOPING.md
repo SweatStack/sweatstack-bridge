@@ -77,8 +77,9 @@ Check every change against these.
 6. **Secrets stay out of logs and output.** Logging goes through `src/log.ts`. It never receives a token, a
    platform's file URL or a request URL, because the webhook path holds a secret. Secrets are compared in
    constant time.
-7. **Migrations only add, and run before the code deploys**, so the running version always works with the
-   next schema.
+7. **Migrations only add, run before the code deploys, and are never edited once published.** The running
+   version then always works with the next schema, and a database that has already run a migration can't
+   miss a change to it. A test holds that.
 
 Core code never names a platform. Everything specific to one lives in `src/providers/`, and a test holds that.
 

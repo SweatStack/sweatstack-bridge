@@ -56,6 +56,9 @@ Bridge 0.1 covers activities and activity history.
 >
 > **Don't delete the D1 database.** Without it, every athlete has to connect again and comes back as a new
 > user. `npx wrangler d1 export` makes a backup. The file holds their tokens, so keep it safe.
+>
+> **Deploy one bridge per Cloudflare account, or rename its database.** A second copy with the same
+> `database_name` attaches to the first copy's database, and shares its tokens.
 
 ### Settings
 

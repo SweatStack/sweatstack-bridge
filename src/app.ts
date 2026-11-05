@@ -30,9 +30,14 @@ export function createApp(deps: Deps): Hono {
 
   app.route("/", platform);
 
-  // Logs the error's name only: a message can carry a URL or a token.
+  // A message can carry a URL or a token, so it's logged only from the database, which reports the
+  // statement and never the values bound to it.
   app.onError((error, c) => {
-    log("request_failed", { error: error.name });
+    log("request_failed", {
+      error: error.name,
+      route: c.req.routePath,
+      detail: error.message.startsWith("D1_") ? error.message : null,
+    });
     return c.json({ error: "server_error" }, 500);
   });
 
