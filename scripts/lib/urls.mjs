@@ -26,9 +26,3 @@ export function urlsToPaste(origin, webhookSecret) {
     },
   ];
 }
-
-/** The custom domain in the Worker's configuration, if it has one. */
-export function customDomain(routes = []) {
-  const route = routes.find((candidate) => typeof candidate === "object" && candidate.custom_domain === true);
-  return route ? `https://${route.pattern}` : null;
-}

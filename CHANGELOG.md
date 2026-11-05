@@ -13,3 +13,5 @@ grant, and the removal of a connection nobody claims within a day. A user's toke
 connection, with a signed request. After updating, save your Garmin card in SweatStack again so it finds the
 endpoint.
 `npm run urls` prints every URL to paste and checks the bridge answers on each one.
+`npm run status` reports on a bridge, with nothing in it you can't share. `npm run update` moves a copy to a newer
+release and keeps its edits.

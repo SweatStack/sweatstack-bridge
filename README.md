@@ -86,8 +86,21 @@ npm run update            # to the latest release
 npm run update -- v0.2.0  # to a specific one
 ```
 
-Review the result, commit and push. Nothing published here changes your deployment until you do.
-`npm run status` tells you when a release is available.
+It applies what changed between two releases and keeps your own edits, marking any real clash. Review the
+result, commit and push. Nothing published here changes your deployment until you do.
+
+`npm run status` tells you when a release is available. To hear about one on GitHub, choose Watch, Custom,
+Releases on this repository.
+
+## Keep an eye on it
+
+```sh
+npm run status
+```
+
+It shows your version, what's missing, whether your bridge and SweatStack answer, how many athletes are connected,
+and which jobs are waiting or failed, with the fix where there's one. It prints no secrets, so it's safe to share.
+Nobody at SweatStack monitors your bridge.
 
 ## Learn more
 

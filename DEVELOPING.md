@@ -139,3 +139,16 @@ SWEATSTACK_URL=... SWEATSTACK_APP_ID=... SWEATSTACK_CLIENT_SECRET=... npm run te
 A copy made with the deploy button shares no git history with this repository, so a plain `git merge` doesn't
 work. `npm run update` applies the difference between two releases as a three-way merge, keeping your edits
 and marking real conflicts. Workers Builds then redeploys, and the deploy script applies any new migrations.
+
+## Release
+
+For this repository only: a copy has no reason to tag.
+
+1. `npm version --no-git-tag-version 1.2.3`. A copy knows its version from `package.json`, and `npm run update`
+   compares tags with it.
+2. In `CHANGELOG.md`, turn what's under Unreleased into a section `## 1.2.3`, the heading `npm run update` and the
+   release notes look for.
+3. Commit, then `git tag v1.2.3 && git push origin main v1.2.3`. The Release workflow publishes that section, and
+   refuses a tag that doesn't match `package.json` or has no section.
+
+Pushing to `main` changes nothing for anyone: only a tag is noticed, and then only by `npm run status`.

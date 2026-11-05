@@ -9,9 +9,12 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "deploy": "node scripts/deploy.mjs",
+    "status": "node scripts/status.mjs",
+    "update": "node scripts/update.mjs",
     "urls": "node scripts/urls.mjs",
     "test": "vitest run",
     "test:staging": "vitest run --config vitest.staging.config.ts",
+    "test:scripts": "node --test scripts/test-update.mjs",
     "typecheck": "tsc"
   },
   "cloudflare": {
@@ -27,6 +30,9 @@
       },
       "BACKFILL_DAYS": {
         "description": "Days of history to request when an athlete connects. A whole number; 90 is a sensible default."
+      },
+      "GARMIN_APP_OFFERS": {
+        "description": "What your Garmin app is approved for, separated by commas, from: activities, activity_history, wellness, workouts. Athletes are only asked to reconnect for what your app can request."
       },
       "SWEATSTACK_CLIENT_SECRET": {
         "description": "A client secret of your app, from its OAuth tab in SweatStack. Make a separate one for the bridge, so the two rotate independently."

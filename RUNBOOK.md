@@ -3,6 +3,11 @@
 What an owner of a bridge does by hand, and how to tell it worked. [DEVELOPING.md](DEVELOPING.md) explains
 how the code works.
 
+## See how it's doing
+
+`npm run status` is the place to start, and it's safe to share. It reads the database through your Cloudflare
+login and asks your bridge, SweatStack and GitHub a question each. More detail is in `npx wrangler tail`.
+
 ## Set up Garmin's notifications
 
 Garmin tells the bridge about new files, changed permissions and removed connections by calling three URLs.

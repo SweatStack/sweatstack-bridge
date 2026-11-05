@@ -486,3 +486,23 @@ describe("the flow's state on the row", () => {
     expect(await state(flow.sub)).toBeNull();
   });
 });
+
+/** Garmin only tries again if it's told the ping wasn't taken. */
+describe("D1 refusing writes", () => {
+  const refusingWrites = (): D1Database =>
+    new Proxy(env.DB, {
+      get(target, property) {
+        if (property === "batch") return () => Promise.reject(new Error("D1_ERROR: writes refused"));
+        const value = Reflect.get(target, property);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+
+  it("answers a ping with an error, so nothing is lost silently", async () => {
+    await resetDatabase({ withSigningKey: true });
+    const w = world({ database: refusingWrites() });
+    const response = await w.webhook("activity-files", { activityFiles: [w.garmin.fileReady(kari, "1")] });
+    expect(response.status).toBe(500);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM inbox").first("count")).toBe(0);
+  });
+});
