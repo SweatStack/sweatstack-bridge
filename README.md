@@ -48,7 +48,7 @@ Bridge 0.1 covers activities and activity history.
    ```
 
 3. **In SweatStack's OAuth tab:** create a client secret. Then run `npx wrangler secret put SWEATSTACK_APP_ID`, and the same for `SWEATSTACK_CLIENT_SECRET`.
-4. **In Garmin's developer tools:** paste the URLs from `npm run urls`. Then set `GARMIN_CLIENT_ID` and `GARMIN_CLIENT_SECRET` the same way, and set `GARMIN_APP_OFFERS` in `wrangler.jsonc` to what your Garmin app is approved for.
+4. **In Garmin's developer tools:** paste the URLs from `npm run urls`, in the [settings the runbook lists](RUNBOOK.md#set-up-garmins-notifications). Without them sign-in works, but no files arrive. Then set `GARMIN_CLIENT_ID` and `GARMIN_CLIENT_SECRET` the same way, and set `GARMIN_APP_OFFERS` in `wrangler.jsonc` to what your Garmin app is approved for.
 5. **In SweatStack's Data sources tab:** choose "Self-hosted" on the Garmin card and paste the issuer URL.
 6. **Test in a private window.**
 
@@ -94,6 +94,7 @@ Review the result, commit and push. Nothing published here changes your deployme
 - [Self-hosted integrations](https://docs.sweatstack.no/learn/applications/self-hosted-integrations/): the contract, and what changes for your users
 - [Garmin setup](https://docs.sweatstack.no/learn/integrations/garmin/): keys, permissions and URLs
 - [DEVELOPING.md](DEVELOPING.md): how the code works, and how to run and change your copy
+- [RUNBOOK.md](RUNBOOK.md): what you do by hand, and how to tell it worked
 - [CHANGELOG.md](CHANGELOG.md)
 
 Questions? [info@sweatstack.no](mailto:info@sweatstack.no). This repository [doesn't take contributions](CONTRIBUTING.md).
