@@ -20,6 +20,13 @@ const PROVIDER = "garmin_connect";
 const REFERENCE = "bridge-fake-check";
 const ALL_UNAVAILABLE = { activities: "unavailable", activity_history: "unavailable", wellness: "unavailable", workouts: "unavailable" };
 
+/** The body of a setup call, or a failure that says what the server answered. */
+async function setup<T>(what: string, response: Response): Promise<T> {
+  const body = await response.text();
+  if (!response.ok) throw new Error(`Couldn't get ${what}: ${response.status} ${body.slice(0, 500)}`);
+  return JSON.parse(body) as T;
+}
+
 export function checks(name: string, target: () => Target): void {
   describe(`SweatStack API: ${name}`, () => {
     let t: Target;
@@ -53,14 +60,15 @@ export function checks(name: string, target: () => Target): void {
       return t.fetch(`${t.url}/api/v1/activities/upload`, { method: "POST", headers: bearer(token), body: form });
     };
 
+    // Stops here if the setup fails: every check below needs these, and would only fail confusingly.
     beforeAll(async () => {
       t = target();
-      const token = await clientTokenRequest(t.clientSecret);
-      clientToken = ((await token.json()) as { access_token: string }).access_token;
-      const user = await createUser();
-      userId = ((await user.json()) as { id: string }).id;
-      const mint = await t.fetch(`${users()}/${userId}/token`, { method: "POST", headers: bearer(clientToken) });
-      userToken = ((await mint.json()) as { access_token: string }).access_token;
+      ({ access_token: clientToken } = await setup<{ access_token: string }>("a client token", await clientTokenRequest(t.clientSecret)));
+      ({ id: userId } = await setup<{ id: string }>("the test user", await createUser()));
+      ({ access_token: userToken } = await setup<{ access_token: string }>(
+        "a token for the test user",
+        await t.fetch(`${users()}/${userId}/token`, { method: "POST", headers: bearer(clientToken) }),
+      ));
     });
 
     it("refuses a wrong client secret, as an OAuth error", async () => {
