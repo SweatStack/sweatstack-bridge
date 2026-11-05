@@ -1,5 +1,3 @@
-import type { Provider } from "./providers/types";
-
 /** What the Worker receives from Cloudflare. A platform's own settings arrive under their own names. */
 export interface Env {
   DB: D1Database;
@@ -23,7 +21,7 @@ const DEFAULT_BACKFILL_DAYS = 90;
  * Reads the settings, reporting every problem at once. The first deploy happens before the owner has
  * their keys, so an incomplete configuration is a normal state and not an error.
  */
-export function readConfig(env: Env, provider: Provider): ConfigResult {
+export function readConfig(env: Env, provider: { requiredSettings: readonly string[] }): ConfigResult {
   const problems: string[] = [];
 
   const required = (name: string): string => {

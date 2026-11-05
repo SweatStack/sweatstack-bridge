@@ -13,8 +13,12 @@ export interface FakeSweatStackOptions {
   clientSecret?: string;
   /** Whether the platform is set to Self-hosted on the app's Data sources tab. */
   selfHosted?: boolean;
+  /** Whether the card names an issuer, which the connection call by subject needs. */
+  hasIssuer?: boolean;
   /** The app's default scopes. A new user gets a copy, and keeps it when the app's change later. */
   defaultScopes?: string[];
+  /** The current time in seconds since the epoch. */
+  now?: () => number;
 }
 
 interface Issued {
@@ -59,7 +63,9 @@ export class FakeSweatStack {
   readonly appId: string;
   readonly clientSecret: string;
   selfHosted: boolean;
+  hasIssuer: boolean;
   defaultScopes: string[];
+  private readonly now: () => number;
 
   /** Everything sent to it, in order, for a test to assert on. */
   readonly calls: { method: string; path: string }[] = [];
@@ -85,13 +91,17 @@ export class FakeSweatStack {
     appId = "test-app",
     clientSecret = "test-client-secret",
     selfHosted = true,
+    hasIssuer = true,
     defaultScopes = ["activities:write"],
+    now = () => Math.floor(Date.now() / 1000),
   }: FakeSweatStackOptions = {}) {
     this.url = url;
     this.appId = appId;
     this.clientSecret = clientSecret;
     this.selfHosted = selfHosted;
+    this.hasIssuer = hasIssuer;
     this.defaultScopes = defaultScopes;
+    this.now = now;
     this.routes();
   }
 
@@ -140,16 +150,35 @@ export class FakeSweatStack {
     return user;
   }
 
+  /** SweatStack's own callback, which it registers as the redirect URI. */
+  redirectUri(provider = "garmin_connect"): string {
+    return `${this.url}/api/v1/tenants/${this.appId}/integration-providers/${provider}/oauth2-authorization-callback`;
+  }
+
   /** The software statement SweatStack signs when it registers itself. */
-  async softwareStatement({ issuer, redirectUri, exp = "5m" }: { issuer: string; redirectUri: string; exp?: string }): Promise<string> {
+  async softwareStatement({
+    issuer,
+    redirectUri = this.redirectUri(),
+    lifetimeSeconds = 5 * 60,
+    softwareId = this.appId,
+    typ = "software-statement+jwt",
+    signedBy = this.url,
+  }: {
+    issuer: string;
+    redirectUri?: string;
+    lifetimeSeconds?: number;
+    softwareId?: string;
+    typ?: string;
+    signedBy?: string;
+  }): Promise<string> {
     const { privateKey, publicJwk } = await this.key();
-    return new SignJWT({ software_id: this.appId, redirect_uris: [redirectUri], client_name: "Test app" })
-      .setProtectedHeader({ alg: "RS256", typ: "software-statement+jwt", kid: publicJwk.kid })
-      .setIssuer(this.url)
+    return new SignJWT({ software_id: softwareId, redirect_uris: [redirectUri], client_name: "SweatStack Sign-In for Test app" })
+      .setProtectedHeader({ alg: "RS256", typ, kid: publicJwk.kid })
+      .setIssuer(signedBy)
       .setAudience(issuer)
       .setJti(this.id("jti"))
-      .setIssuedAt()
-      .setExpirationTime(exp)
+      .setIssuedAt(this.now())
+      .setExpirationTime(this.now() + lifetimeSeconds)
       .sign(privateKey);
   }
 
@@ -169,7 +198,7 @@ export class FakeSweatStack {
       .setAudience(issuer)
       .setSubject(userId)
       .setJti(this.id("jti"))
-      .setIssuedAt()
+      .setIssuedAt(this.now())
       .sign(privateKey);
   }
 
@@ -251,7 +280,7 @@ export class FakeSweatStack {
     app.put(bySubject, async (c) => {
       const refused = this.refuseUnlessClient(c);
       if (refused) return refused;
-      if (!this.selfHosted) return c.json({ detail: "Not set to self-hosted." }, 409);
+      if (!this.selfHosted || !this.hasIssuer) return c.json({ detail: "Not set to self-hosted with an issuer." }, 409);
       const body = await c.req.json<{ capabilities?: Record<string, string>; state?: string }>();
       const capabilities = body.capabilities;
       if (!validCapabilities(capabilities)) return c.json({ detail: "Invalid capabilities." }, 422);
@@ -271,12 +300,14 @@ export class FakeSweatStack {
         capabilities,
         connected_at: existing?.connected_at ?? new Date(0).toISOString(),
       });
-      return c.json({ user_id: userId });
+      const connection = this.connections.get(subject) as Connection;
+      return c.json({ user_id: userId, provider, capabilities, connected_at: connection.connected_at });
     });
 
     app.delete(bySubject, (c) => {
       const refused = this.refuseUnlessClient(c);
       if (refused) return refused;
+      if (!this.selfHosted || !this.hasIssuer) return c.json({ detail: "Not set to self-hosted with an issuer." }, 409);
       this.connections.delete(c.req.param("subject"));
       return c.body(null, 204);
     });

@@ -5,5 +5,5 @@ them.
 
 ## Unreleased
 
-Not usable yet. The repository skeleton: the Worker, the database schema, the deploy script and the test
-harness.
+Not usable yet. The OpenID Provider and the sign-in, on Garmin: discovery, keys, registration, the
+authorization code flow, and the connection call. No files are relayed yet.

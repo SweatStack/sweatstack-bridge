@@ -2,8 +2,8 @@
 
 How the bridge works, and how to run and change it. Start here if you're changing your own copy.
 
-**Being built.** This describes the code as it's intended to be, and much of it doesn't exist yet. So far
-there's the skeleton: the Worker, the schema, the deploy script and the test harness.
+**Being built.** This describes the code as it's intended to be, and some of it doesn't exist yet. So far
+there's the OpenID Provider and the sign-in. Files, retries and the owner's commands come next.
 
 ## How it works
 
@@ -16,7 +16,7 @@ The bridge is two things that share only a user id:
   acknowledges at once, queues the work in D1, downloads the file and uploads it to SweatStack, deduplicated
   on the platform's activity id. A cron trigger every minute handles retries.
 
-[The contract](https://docs.sweatstack.no/learn/integrations/self-hosted/contract/) is the whole of what
+[The contract](https://docs.sweatstack.no/learn/applications/self-hosted-integrations/) is the whole of what
 SweatStack expects from it.
 
 ## Layout
@@ -26,7 +26,14 @@ src/
   index.ts            Worker entry: builds the dependencies
   app.ts              createApp(deps): the routes
   config.ts           Reads the settings; reports what's missing
+  db.ts               The SQL: one method per query
+  crypto.ts           Random values, hashes, the subject
+  http.ts             Every outbound call goes through here
   log.ts              The one way to log
+  sweatstack.ts       The calls to SweatStack's public API, and nothing else
+  connections.ts      What a connection provides, and whose it is
+  oidc/               The OpenID Provider: discovery, keys, registration, authorize, token
+  flows/              The platform's redirect, and what follows a consent
   providers/          Everything specific to one platform
 migrations/           The D1 schema
 scripts/              deploy, dev, and what they share
@@ -34,7 +41,8 @@ test/
   contract/           What SweatStack can see, over HTTP only
   internal/           What it can't see: races, retries, budgets
   fake-check/         Holds the fake SweatStack to a real one
-  fakes/              The fake SweatStack
+  fakes/              The fake SweatStack and the fake Garmin
+  fixtures/           Sample data shared with SweatStack
   support/            The test harness
 ```
 
@@ -83,6 +91,7 @@ The design assumes Cloudflare's free plan: 10 ms of CPU per request or run, and 
 | Generating an RSA key | 24 to 222 ms, so the deploy script does it and the Worker never does |
 | Signing an ID token | 1 to 3 ms |
 | Relaying a file | About 3 ms per MB |
+| Verifying a registration | 11 ms from cold. It's rare, and SweatStack can simply be asked to save again |
 
 ## Tests
 

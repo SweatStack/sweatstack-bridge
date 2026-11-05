@@ -151,6 +151,51 @@ export function checks(name: string, target: () => Target): void {
       expect(response.status).toBe(422);
     });
 
+    describe("the connection call by subject", () => {
+      const subject = "bridge-fake-check-subject";
+      const bySubject = () => `${t.url}/api/v1/applications/${t.appId}/connections/${PROVIDER}/${subject}`;
+      const put = (body: object) =>
+        t.fetch(bySubject(), {
+          method: "PUT",
+          headers: bearer(clientToken, { "Content-Type": "application/json" }),
+          body: JSON.stringify(body),
+        });
+
+      // The test app may be set up without an issuer, and then this call can only answer 409.
+      const skipWithoutIssuer = async (context: { skip: (note?: string) => void }) => {
+        const response = await put({ capabilities: ALL_UNAVAILABLE });
+        if (response.status === 409) context.skip("the test app's card has no issuer");
+      };
+
+      it("answers null for a subject it doesn't know, with no state or an invalid one", async (context) => {
+        await skipWithoutIssuer(context);
+        for (const body of [{}, { state: "not-a-state" }]) {
+          const response = await put({ capabilities: ALL_UNAVAILABLE, ...body });
+          await expectStatus(response, 200);
+          expect(await response.json()).toMatchObject({ user_id: null, provider: PROVIDER, capabilities: ALL_UNAVAILABLE });
+        }
+      });
+
+      it("refuses a capability it doesn't know", async (context) => {
+        await skipWithoutIssuer(context);
+        expect((await put({ capabilities: { activities: "excellent" } })).status).toBe(422);
+      });
+
+      it("removes a connection, and removing it twice is safe", async (context) => {
+        await skipWithoutIssuer(context);
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          const removed = await t.fetch(bySubject(), { method: "DELETE", headers: bearer(clientToken) });
+          await expectStatus(removed, 204);
+        }
+      });
+
+      it("keeps user tokens off it", async (context) => {
+        await skipWithoutIssuer(context);
+        const response = await t.fetch(bySubject(), { method: "DELETE", headers: bearer(userToken) });
+        expect(response.status).toBe(403);
+      });
+    });
+
     it("takes a relayed file as a source, and the same id is the same source", async () => {
       const first = await upload(userToken);
       await expectStatus(first, 202);

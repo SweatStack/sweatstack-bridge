@@ -8,12 +8,11 @@
   "workers_dev": true,
   "preview_urls": false,
 
-  // Settings that aren't secret. The deploy button shows these as fields; secrets are listed in
-  // .dev.vars.example.
+  // Change these here, in your copy. A deploy resets any variable named here to the value here, so one
+  // set in the dashboard wouldn't last. The rest of the settings are secrets, because a deploy leaves
+  // those alone, even the ones that aren't sensitive. They're listed in .dev.vars.example.
   "vars": {
     "SWEATSTACK_URL": "https://app.sweatstack.no",
-    "SWEATSTACK_APP_ID": "",
-    "GARMIN_CLIENT_ID": "",
     "BACKFILL_DAYS": "90"
   },
 

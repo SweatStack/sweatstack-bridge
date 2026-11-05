@@ -1,15 +1,16 @@
-import { Hono } from "hono";
-import { readConfig, type Env } from "./config";
+import { Hono, type MiddlewareHandler } from "hono";
+import { readConfig } from "./config";
+import type { PlatformVariables } from "./context";
+import { Database } from "./db";
+import type { Deps } from "./deps";
+import { platformCallback } from "./flows/platform-callback";
 import { log } from "./log";
+import { authorize } from "./oidc/authorize";
+import { discovery } from "./oidc/discovery";
+import { jwks } from "./oidc/keys";
+import { register } from "./oidc/register";
+import { token } from "./oidc/token";
 import { findProvider } from "./providers";
-
-/** Everything the bridge takes from the outside world, so tests can replace all of it. */
-export interface Deps {
-  env: Env;
-  fetch: typeof fetch;
-  /** The current time in seconds since the epoch. */
-  now: () => number;
-}
 
 const README_URL = "https://github.com/SweatStack/sweatstack-bridge";
 
@@ -18,15 +19,16 @@ export function createApp(deps: Deps): Hono {
 
   app.get("/", (c) => c.text(`A SweatStack bridge. See ${README_URL}\n`));
 
-  // A public route never says which setting is missing. `npm run status` tells the owner.
-  app.all("/oidc/:provider/*", async (c, next) => {
-    const provider = findProvider(c.req.param("provider"));
-    if (!provider) return c.notFound();
-    if (!readConfig(deps.env, provider).ok) {
-      return c.json({ error: "temporarily_unavailable" }, 503);
-    }
-    await next();
-  });
+  const platform = new Hono<{ Variables: PlatformVariables }>();
+  platform.use(servesPlatform(deps));
+  platform.get("/oidc/:provider/.well-known/openid-configuration", discovery);
+  platform.get("/oidc/:provider/authorize", authorize);
+  platform.post("/oidc/:provider/token", token);
+  platform.get("/oidc/:provider/jwks", jwks);
+  platform.post("/oidc/:provider/register", register);
+  platform.get("/callback/:provider", platformCallback);
+
+  app.route("/", platform);
 
   // Logs the error's name only: a message can carry a URL or a token.
   app.onError((error, c) => {
@@ -35,4 +37,30 @@ export function createApp(deps: Deps): Hono {
   });
 
   return app;
+}
+
+/**
+ * Answers for a platform that doesn't exist or isn't set up yet, and gives the routes what they need. A
+ * public route never says which setting is missing: `npm run status` tells the owner.
+ */
+function servesPlatform(deps: Deps): MiddlewareHandler<{ Variables: PlatformVariables }> {
+  return async (c, next) => {
+    const url = new URL(c.req.url);
+    const [, root, name] = url.pathname.split("/");
+    if ((root !== "oidc" && root !== "callback") || name === undefined) return c.notFound();
+
+    const provider = findProvider(name, deps);
+    if (provider === undefined) return c.notFound();
+
+    const result = readConfig(deps.env, provider);
+    if (!result.ok) return c.json({ error: "temporarily_unavailable" }, 503);
+
+    c.set("deps", deps);
+    c.set("db", new Database(deps.env.DB));
+    c.set("config", result.config);
+    c.set("provider", provider);
+    c.set("issuer", `${url.origin}/oidc/${provider.name}`);
+    c.set("callbackUrl", `${url.origin}/callback/${provider.name}`);
+    await next();
+  };
 }

@@ -1,0 +1,37 @@
+[
+  {
+    "name": "permissions not known yet",
+    "state": { "permissions": null, "needsReconnect": false, "backfillDone": false },
+    "capabilities": { "activities": "syncing", "activity_history": "syncing", "wellness": "unavailable", "workouts": "unavailable" }
+  },
+  {
+    "name": "everything granted, backfill running",
+    "state": { "permissions": ["ACTIVITY_EXPORT", "HISTORICAL_DATA_EXPORT"], "needsReconnect": false, "backfillDone": false },
+    "capabilities": { "activities": "syncing", "activity_history": "syncing", "wellness": "unavailable", "workouts": "unavailable" }
+  },
+  {
+    "name": "everything granted, backfill done",
+    "state": { "permissions": ["ACTIVITY_EXPORT", "HISTORICAL_DATA_EXPORT"], "needsReconnect": false, "backfillDone": true },
+    "capabilities": { "activities": "ready", "activity_history": "ready", "wellness": "unavailable", "workouts": "unavailable" }
+  },
+  {
+    "name": "no activity export",
+    "state": { "permissions": ["HISTORICAL_DATA_EXPORT"], "needsReconnect": false, "backfillDone": false },
+    "capabilities": { "activities": "action_required", "activity_history": "syncing", "wellness": "unavailable", "workouts": "unavailable" }
+  },
+  {
+    "name": "no history export",
+    "state": { "permissions": ["ACTIVITY_EXPORT"], "needsReconnect": false, "backfillDone": false },
+    "capabilities": { "activities": "syncing", "activity_history": "action_required", "wellness": "unavailable", "workouts": "unavailable" }
+  },
+  {
+    "name": "nothing granted",
+    "state": { "permissions": [], "needsReconnect": false, "backfillDone": false },
+    "capabilities": { "activities": "action_required", "activity_history": "action_required", "wellness": "unavailable", "workouts": "unavailable" }
+  },
+  {
+    "name": "the grant is gone",
+    "state": { "permissions": ["ACTIVITY_EXPORT", "HISTORICAL_DATA_EXPORT"], "needsReconnect": true, "backfillDone": true },
+    "capabilities": { "activities": "action_required", "activity_history": "action_required", "wellness": "unavailable", "workouts": "unavailable" }
+  }
+]

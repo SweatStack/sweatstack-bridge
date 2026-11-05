@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { readConfig, type Env } from "../../src/config";
-import { garmin } from "../../src/providers/garmin";
-import { COMPLETE_SETTINGS } from "../support/bridge";
 
+const COMPLETE_SETTINGS = {
+  SWEATSTACK_URL: "https://sweatstack.test",
+  SWEATSTACK_APP_ID: "test-app",
+  SWEATSTACK_CLIENT_SECRET: "test-client-secret",
+  GARMIN_CLIENT_ID: "test-garmin-id",
+  GARMIN_CLIENT_SECRET: "test-garmin-secret",
+  BACKFILL_DAYS: "90",
+};
+
+const garmin = { requiredSettings: ["GARMIN_CLIENT_ID", "GARMIN_CLIENT_SECRET"] };
 const read = (settings: Record<string, string>) => readConfig({ ...settings } as unknown as Env, garmin);
 
 describe("readConfig", () => {

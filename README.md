@@ -15,7 +15,7 @@ The bridge is a small service you deploy yourself, and your athletes keep the no
 - **Your Garmin consent:** athletes see your app's name on Garmin's consent screen.
 - **Your keys and tokens:** they stay in your Cloudflare account. SweatStack never holds them.
 - **Truthful status:** the account status and the Portal show what each connection can do.
-- **No lock-in:** SweatStack doesn't depend on this code. [The contract](https://docs.sweatstack.no/learn/integrations/self-hosted/contract/)
+- **No lock-in:** SweatStack doesn't depend on this code. [The contract](https://docs.sweatstack.no/learn/applications/self-hosted-integrations/)
   is all you need if you'd rather build your own.
 
 Bridge 0.1 covers activities and activity history.
@@ -33,11 +33,11 @@ Bridge 0.1 covers activities and activity history.
 - [ ] A [live SweatStack app](https://docs.sweatstack.no/learn/applications/going-live/) with the `activities:write` scope. Set it before your first user: a user keeps the scopes they were created with, and SweatStack refuses every file for a user without it
 - [ ] [Keys from Garmin's developer program](https://docs.sweatstack.no/learn/integrations/garmin/). Request them early: it's the one step whose timing you don't control
 - [ ] A Cloudflare account. The free plan covers a small app, and USD 5 a month removes its limits
-- [ ] You've read [what changes for your users](https://docs.sweatstack.no/learn/integrations/self-hosted/#your-users). In short: your sign-in page loses its email field, and one person can end up as two users. **Never merge users by email.**
+- [ ] You've read [what changes for your users](https://docs.sweatstack.no/learn/applications/self-hosted-integrations/#what-athletes-see-on-your-sign-in-screen). In short: your sign-in page loses its email field, and one person can end up as two users. **Never merge users by email.**
 
 ## Deploy
 
-1. **Click the deploy button.** Leave anything you don't have yet empty.
+1. **Click the deploy button.** Leave anything you don't have yet empty, and set it in steps 3 and 4.
 2. **Clone your copy, then:**
 
    ```sh
@@ -47,8 +47,8 @@ Bridge 0.1 covers activities and activity history.
    npm run urls     # every URL to paste; includes a secret, so keep it private
    ```
 
-3. **In SweatStack's OAuth tab:** create a client secret. Set `SWEATSTACK_APP_ID` and `SWEATSTACK_CLIENT_SECRET`.
-4. **In Garmin's developer tools:** paste the URLs from `npm run urls`. Set `GARMIN_CLIENT_ID` and `GARMIN_CLIENT_SECRET`.
+3. **In SweatStack's OAuth tab:** create a client secret. Then run `npx wrangler secret put SWEATSTACK_APP_ID`, and the same for `SWEATSTACK_CLIENT_SECRET`.
+4. **In Garmin's developer tools:** paste the URLs from `npm run urls`. Then set `GARMIN_CLIENT_ID` and `GARMIN_CLIENT_SECRET` the same way.
 5. **In SweatStack's Data sources tab:** choose "Self-hosted" on the Garmin card and paste the issuer URL.
 6. **Test in a private window.**
 
@@ -59,14 +59,21 @@ Bridge 0.1 covers activities and activity history.
 
 ### Settings
 
-| Name | Kind | What |
-|---|---|---|
-| `SWEATSTACK_URL` | var | Where SweatStack runs. Leave as is |
-| `SWEATSTACK_APP_ID` | var | Your app's client id |
-| `GARMIN_CLIENT_ID` | var | Your Garmin client id |
-| `BACKFILL_DAYS` | var | Days of history to request on connecting. Default 90 |
-| `SWEATSTACK_CLIENT_SECRET` | secret | A client secret just for the bridge, so it rotates separately |
-| `GARMIN_CLIENT_SECRET` | secret | Your Garmin client secret |
+Set these with `npx wrangler secret put <name>`. A deploy leaves them alone.
+
+| Name | What |
+|---|---|
+| `SWEATSTACK_APP_ID` | Your app's client id |
+| `SWEATSTACK_CLIENT_SECRET` | A client secret just for the bridge, so it rotates separately |
+| `GARMIN_CLIENT_ID` | Your Garmin client id |
+| `GARMIN_CLIENT_SECRET` | Your Garmin client secret |
+
+Change these in `wrangler.jsonc` in your copy, not in the Cloudflare dashboard, because a deploy resets them to what the file says.
+
+| Name | What |
+|---|---|
+| `SWEATSTACK_URL` | Where SweatStack runs. Leave as is |
+| `BACKFILL_DAYS` | Days of history to request on connecting. Default 90 |
 
 ## Update
 
@@ -80,8 +87,7 @@ Review the result, commit and push. Nothing published here changes your deployme
 
 ## Learn more
 
-- [Self-hosted integrations](https://docs.sweatstack.no/learn/integrations/self-hosted/): how they work and what changes for your users
-- [The contract](https://docs.sweatstack.no/learn/integrations/self-hosted/contract/): what SweatStack requires of any integration
+- [Self-hosted integrations](https://docs.sweatstack.no/learn/applications/self-hosted-integrations/): the contract, and what changes for your users
 - [Garmin setup](https://docs.sweatstack.no/learn/integrations/garmin/): keys, permissions and URLs
 - [DEVELOPING.md](DEVELOPING.md): how the code works, and how to run and change your copy
 - [CHANGELOG.md](CHANGELOG.md)

@@ -12,7 +12,7 @@ aligned with what SweatStack's platform needs next.
 - **Change your own copy.** That's what it's for, and the [license](LICENSE) allows it.
   [DEVELOPING.md](DEVELOPING.md) shows you how. `npm run update` keeps your edits when you update.
 - **Build your own integration.** SweatStack only depends on
-  [the contract](https://docs.sweatstack.no/learn/integrations/self-hosted/contract/), not on this code.
+  [the contract](https://docs.sweatstack.no/learn/applications/self-hosted-integrations/), not on this code.
 - **Tell us what you need.** Using the bridge with SweatStack, or wondering whether it fits your app? We'd
   like to hear from you at [info@sweatstack.no](mailto:info@sweatstack.no).
 - **Report a bug** by [opening an issue](https://github.com/SweatStack/sweatstack-bridge/issues). We read

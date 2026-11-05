@@ -14,6 +14,7 @@ CREATE TABLE flows (
   id TEXT PRIMARY KEY,
   provider TEXT NOT NULL,
   platform_verifier TEXT NOT NULL,
+  rp_client_id TEXT NOT NULL,
   rp_state TEXT NOT NULL,
   rp_nonce TEXT,
   rp_redirect_uri TEXT NOT NULL,

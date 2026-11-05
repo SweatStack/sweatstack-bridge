@@ -1,5 +1,6 @@
 import { env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import { resetDatabase } from "../support/world";
 
 const meta = async (key: string) =>
   (await env.DB.prepare("SELECT value FROM meta WHERE key = ?").bind(key).first<{ value: string }>())?.value;
@@ -11,6 +12,8 @@ const addJob = (kind: string, externalId: string | null) =>
   )
     .bind(kind, externalId)
     .run();
+
+beforeEach(() => resetDatabase({ withSigningKey: false }));
 
 describe("the first migration", () => {
   it("creates the webhook secret and the subject key, each random and different", async () => {
