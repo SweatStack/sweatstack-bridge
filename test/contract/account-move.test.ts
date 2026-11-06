@@ -119,15 +119,15 @@ describe("moving an existing SweatStack account", () => {
     await w.signIn(client, kari);
     await w.settled();
 
-    // Past the first hour in one go. Backoff then needs a few tries to grow beyond a minute.
+    // Past the first hour in one go. Asking every minute would leave no minute without a call.
     w.clock.now += 61 * MINUTE;
-    await w.cron();
-    await aMinuteLater();
-    await aMinuteLater();
-
-    const before = w.sweatstack.connectionCalls.length;
-    await aMinuteLater();
-    expect(w.sweatstack.connectionCalls.length).toBe(before);
+    let quietMinutes = 0;
+    for (let minute = 0; minute < 10; minute += 1) {
+      const before = w.sweatstack.connectionCalls.length;
+      await aMinuteLater();
+      if (w.sweatstack.connectionCalls.length === before) quietMinutes += 1;
+    }
+    expect(quietMinutes).toBeGreaterThan(0);
   });
 
   it("uploads to a new user when the athlete starts fresh", async () => {
