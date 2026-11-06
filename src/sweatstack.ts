@@ -82,12 +82,14 @@ async function callAsApp(services: SweatStackServices, path: string, init: Reque
  */
 export async function declareConnection(
   services: SweatStackServices,
-  declaration: { provider: string; subject: string; capabilities: CapabilityMap; state: string | null },
+  declaration: { provider: string; subject: string; capabilities: CapabilityMap; state: string | null; platformUserId?: string },
 ): Promise<string | null> {
   const { appId } = services.config;
   const body = {
     capabilities: declaration.capabilities,
     ...(declaration.state === null ? {} : { state: declaration.state }),
+    // Goes with `state`, so that SweatStack can ask someone who already uses the app whether to move their account.
+    ...(declaration.state === null || declaration.platformUserId === undefined ? {} : { platform_user_id: declaration.platformUserId }),
   };
   const response = await callAsApp(services, `/api/v1/applications/${appId}/connections/${declaration.provider}/${declaration.subject}`, {
     method: "PUT",

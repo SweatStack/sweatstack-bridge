@@ -34,7 +34,7 @@ export async function platformCallback(c: PlatformContext): Promise<Response> {
     const sub = await deriveSubject(subjectKey, provider.name, platformUserId);
     const followUps = permissions === null ? (["permissions_change"] as const) : provider.mayBackfill(permissions) ? (["backfill"] as const) : [];
     await db.saveConsent({ sub, provider: provider.name, rpState: flow.rp_state, ...tokens, permissions, consentedAt: deps.now() }, [...followUps]);
-    await declareAfterConsent({ config, db, deps, provider }, sub);
+    await declareAfterConsent({ config, db, deps, provider }, sub, platformUserId);
     await db.issueCode(flow.id, await hashSecret(issued), sub, deps.now() + CODE_LIFETIME_SECONDS);
   } catch (failure) {
     log("consent_failed", {

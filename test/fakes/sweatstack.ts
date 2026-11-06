@@ -99,7 +99,9 @@ export class FakeSweatStack {
   /** Every scope a user's token was minted with, in order. */
   readonly mintedScopes: string[][] = [];
   /** What each connection call said, in order, for a test of how a connection's state changed. */
-  readonly connectionCalls: { subject: string; capabilities: Record<string, string> }[] = [];
+  readonly connectionCalls: { subject: string; capabilities: Record<string, string>; state?: string; platformUserId?: string }[] = [];
+  /** The accounts asked to move, by the platform's id for the person. */
+  private readonly moveOffers = new Map<string, string>();
   /** Subject to user. Outlives a disconnect, so the same platform account is the same user. */
   readonly identities = new Map<string, string>();
 
@@ -157,6 +159,18 @@ export class FakeSweatStack {
     if (holder !== undefined && holder !== startedBy) return "refused";
     this.link(subject, startedBy);
     return "linked";
+  }
+
+  /** An account that uses the app through SweatStack's own connection, so a sign-in by this person is asked to move it. */
+  offerMove(platformUserId: string): FakeUser {
+    const account = this.createUser({});
+    this.moveOffers.set(platformUserId, account.id);
+    return account;
+  }
+
+  /** The athlete answered yes and proved the account is theirs: the subject now belongs to the old account. */
+  accountMoved(subject: string, accountId: string): void {
+    this.link(subject, accountId);
   }
 
   createUser(fields: Partial<FakeUser>): FakeUser {
@@ -309,19 +323,26 @@ export class FakeSweatStack {
       const refused = this.refuseUnlessClient(c);
       if (refused) return refused;
       if (!this.selfHosted || !this.hasIssuer) return c.json({ detail: "Not set to self-hosted with an issuer." }, 409);
-      const body = await c.req.json<{ capabilities?: Record<string, string>; state?: string }>();
+      const body = await c.req.json<{ capabilities?: Record<string, string>; state?: string; platform_user_id?: string }>();
       const capabilities = body.capabilities;
       if (!validCapabilities(capabilities)) return c.json({ detail: "Invalid capabilities." }, 422);
       const subject = c.req.param("subject");
       const provider = c.req.param("provider");
 
       let userId = this.identities.get(subject) ?? null;
-      if (userId === null && body.state !== undefined && this.flows.get(body.state) === null) {
+      // Only a call with the hint is held back for the question: a repeat with `state` and no hint makes the user.
+      const asked = body.platform_user_id !== undefined && this.moveOffers.has(body.platform_user_id);
+      if (userId === null && body.state !== undefined && this.flows.get(body.state) === null && !asked) {
         // A new subject in a sign-in started by nobody: the user exists from here on.
         userId = this.createUser({}).id;
         this.identities.set(subject, userId);
       }
-      this.connectionCalls.push({ subject, capabilities });
+      this.connectionCalls.push({
+        subject,
+        capabilities,
+        ...(body.state === undefined ? {} : { state: body.state }),
+        ...(body.platform_user_id === undefined ? {} : { platformUserId: body.platform_user_id }),
+      });
       const existing = this.connections.get(subject);
       this.connections.set(subject, {
         userId,

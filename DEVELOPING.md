@@ -33,6 +33,13 @@ behind it, for that connection only, so nobody else's backlog can delay it. A br
 is retried every half second at first and for seven seconds in all on a job's first run, and after that with
 the usual backoff.
 
+**Someone with a SweatStack account.** The call after consent also carries the platform's id for the person, so
+that SweatStack can ask whether to move an account they already use with the app. It's only ever in memory, for
+that one call: `sub` stays the only id the bridge keeps. Until they answer, the answer is `user_id: null`, files
+wait, and the connection looks like any other waiting for its user. The flow's `state` goes after that first
+answer, because a later call that still carried it would make a new user and end the question. If that first
+call fails, nobody is asked: SweatStack makes a new user as for anyone.
+
 **History reads `ready` once every window has an answer and at least one was accepted.** The platform has no
 signal for "finished", and files keep arriving afterwards. If it accepted none, the connection stays `syncing`,
 which SweatStack ends after 24 hours, and the next consent or permission change asks again.

@@ -468,22 +468,37 @@ describe("a disconnect, against what happens meanwhile", () => {
 describe("the flow's state on the row", () => {
   const state = async (sub: string) => (await row(sub)).rp_state;
 
-  it("is kept only while the user is unknown", async () => {
+  it("is kept only until SweatStack has answered the call it's for", async () => {
     await resetDatabase({ withSigningKey: true });
     const w = world();
     const client = await w.register();
     const starter = w.sweatstack.createUser({});
     const flow = await w.signIn(client, kari, { startedBy: starter.id });
-    expect(await state(flow.sub)).toBe(flow.state);
+    expect(await state(flow.sub)).toBeNull();
 
     w.sweatstack.browserReturns(flow.state, flow.sub, { session: starter.id });
     await w.settled();
-    expect(await state(flow.sub)).toBeNull();
 
     // A reconnect: the user is known, so this flow's state will never be sent.
     await w.signIn(client, kari, { startedBy: starter.id });
     await w.settled();
     expect(await state(flow.sub)).toBeNull();
+  });
+
+  it("stays when that call fails, so the retry can still carry it", async () => {
+    await resetDatabase({ withSigningKey: true });
+    let refused = false;
+    const w = world({
+      intercept: (request) => {
+        if (request.method !== "PUT" || !request.url.includes("/connections/") || refused) return undefined;
+        refused = true;
+        return new Response(null, { status: 503 });
+      },
+    });
+    const client = await w.register();
+    const flow = await w.consent(client, kari);
+    const { results } = await env.DB.prepare("SELECT rp_state FROM connections").all<{ rp_state: string | null }>();
+    expect(results).toEqual([{ rp_state: flow.state }]);
   });
 });
 

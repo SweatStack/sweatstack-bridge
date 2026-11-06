@@ -279,6 +279,11 @@ export class Database {
     ]);
   }
 
+  /** SweatStack has answered the call this `state` was for. Only that one: a new consent may have brought another. */
+  async forgetState(sub: string, state: string): Promise<void> {
+    await this.d1.prepare("UPDATE connections SET rp_state = NULL WHERE sub = ? AND rp_state = ?").bind(sub, state).run();
+  }
+
   /**
    * Claims the right to refresh, before anything is sent: a refresh token works once, and using a spent
    * one may revoke the grant. Null when someone else holds the claim.

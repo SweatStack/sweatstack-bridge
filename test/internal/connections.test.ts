@@ -1,5 +1,6 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Database } from "../../src/db";
 import { createApp } from "../../src/app";
 import { ALL_PERMISSIONS, resetDatabase, world, type Client } from "../support/world";
 
@@ -39,15 +40,23 @@ describe("what the bridge stores", () => {
     expect(results).toEqual([]);
   });
 
+  it("doesn't drop the state of a newer consent when an older call's answer comes in", async () => {
+    const user = w.sweatstack.createUser({});
+    const { sub } = await w.signIn(client, kari, { startedBy: user.id });
+    await env.DB.prepare("UPDATE connections SET rp_state = 'newer' WHERE sub = ?").bind(sub).run();
+    await new Database(env.DB).forgetState(sub, "older");
+    expect(await connection(sub)).toMatchObject({ rp_state: "newer" });
+  });
+
   it("clears the state once it knows the user", async () => {
     const { sub } = await w.signIn(client, kari);
     expect(await connection(sub)).toMatchObject({ user_id: expect.any(String), rp_state: null });
   });
 
-  it("keeps the state while it waits for the user", async () => {
+  it("drops the state once SweatStack has answered, even without a user: it's only for that first call", async () => {
     const user = w.sweatstack.createUser({});
-    const { sub, state } = await w.signIn(client, kari, { startedBy: user.id });
-    expect(await connection(sub)).toMatchObject({ user_id: null, rp_state: state });
+    const { sub } = await w.signIn(client, kari, { startedBy: user.id });
+    expect(await connection(sub)).toMatchObject({ user_id: null, rp_state: null });
   });
 
   it("stores unknown permissions as unknown, not as none", async () => {
