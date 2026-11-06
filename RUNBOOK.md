@@ -35,10 +35,11 @@ wearable platform steps here are Garmin's. [DEVELOPING.md](DEVELOPING.md) explai
 5. **In `wrangler.jsonc`:** set `GARMIN_APP_OFFERS` to what your Garmin app is approved for, then commit and push.
 6. **In SweatStack's Data sources tab:** choose "Self-hosted" on the Garmin card and paste the issuer URL.
 7. Run `npm run status`, then [try a sign-in](#try-a-sign-in-again) in a private window.
+8. **At Garmin:** [verify your app](https://apis.garmin.com/tools/partnerVerification), so that other athletes can use it too.
 
 Three things to get right from the start:
 
-- **Choose your domain before athletes connect.** Moving it later means repeating steps 4 and 6. To use your own, add `"routes": [{ "pattern": "garmin.example.com", "custom_domain": true }]` to `wrangler.jsonc`.
+- **Decide on your address before step 4, so you only paste the URLs once.** Your bridge starts at `https://sweatstack-bridge.<your-subdomain>.workers.dev`, and you can keep it: athletes only pass through it during sign-in. Use your own domain if you want the bridge to stay at one address wherever it runs, or don't want to show your Cloudflare subdomain. The domain has to be on Cloudflare in the same account. Then add `"routes": [{ "pattern": "garmin.example.com", "custom_domain": true }]` to `wrangler.jsonc`. Moving later means repeating steps 4 and 6.
 - **Don't delete the D1 database.** Without it, every athlete has to connect again and comes back as a new user. `npx wrangler d1 export` makes a backup. The file holds their tokens, so keep it safe.
 - **Deploy one bridge per Cloudflare account, or rename its database.** A second copy with the same `database_name` attaches to the first copy's database, and shares its tokens.
 
