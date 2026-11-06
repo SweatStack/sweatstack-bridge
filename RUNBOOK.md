@@ -1,7 +1,7 @@
 # Runbook
 
-Everything an owner of a bridge does by hand, and how to tell it worked. [DEVELOPING.md](DEVELOPING.md) explains
-how the code works.
+Everything an owner of a bridge does by hand, and how to tell it worked. The bridge works with Garmin, so the
+wearable platform steps here are Garmin's. [DEVELOPING.md](DEVELOPING.md) explains how the code works.
 
 - [Before you start](#before-you-start)
 - [Deploy](#deploy)

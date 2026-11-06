@@ -4,7 +4,8 @@ How the bridge works, and how to run and change it. Start here if you're changin
 
 ## How it works
 
-The bridge is two things that share only a user id:
+The bridge connects a wearable platform to your app built on SweatStack, and it works with Garmin. It's two
+things that share only a user id:
 
 - **An OpenID Provider, one issuer per platform.** SweatStack is its relying party. The bridge runs the
   platform's consent, starts the backfill, tells SweatStack what the connection provides, and hands back an

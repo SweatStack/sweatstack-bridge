@@ -5,7 +5,7 @@ pull requests or feature requests. They'll be closed without review. That's no c
 
 SweatStack publishes this code so you can read exactly what runs in your own account, deploy it, and use it
 as a reference for your own integration. We keep it small and maintain it ourselves, so that it stays
-aligned with what SweatStack's platform needs next.
+aligned with what SweatStack needs next.
 
 ## What you can do instead
 

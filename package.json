@@ -2,7 +2,7 @@
   "name": "sweatstack-bridge",
   "version": "0.0.0",
   "private": true,
-  "description": "Let athletes sign in with Garmin to your app built on SweatStack, and get their activities, on your own Garmin keys.",
+  "description": "Connect a wearable platform to your app built on SweatStack, under your own name and on your own keys.",
   "license": "MIT",
   "type": "module",
   "engines": { "node": ">=22" },
