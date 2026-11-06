@@ -30,7 +30,8 @@ hour, and ending after three days. A job reads the connection when it runs, so t
 
 **The first seconds after a consent.** The browser's redirect waits only for the connection call. The rest runs
 behind it, for that connection only, so nobody else's backlog can delay it. A brief refusal from the platform
-is retried after 1, 2 and 4 seconds on a job's first run, and after that with the usual backoff.
+is retried every half second at first and for seven seconds in all on a job's first run, and after that with
+the usual backoff.
 
 **History reads `ready` once every window has an answer and at least one was accepted.** The platform has no
 signal for "finished", and files keep arriving afterwards. If it accepted none, the connection stays `syncing`,

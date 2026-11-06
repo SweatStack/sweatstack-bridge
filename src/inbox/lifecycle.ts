@@ -8,9 +8,10 @@ const DAY_SECONDS = 24 * 60 * 60;
 
 /**
  * Right after a consent the platform can refuse for a moment. The first seconds decide the onboarding,
- * so those refusals are retried here, not left to the next run a minute away.
+ * so those refusals are retried here, not left to the next run a minute away. Often at first, because any
+ * time spent waiting after the platform is ready is time an athlete waits for nothing.
  */
-const FIRST_RUN_WAITS_MS = [1_000, 2_000, 4_000];
+const FIRST_RUN_WAITS_MS = [500, 500, 500, 500, 1_000, 1_500, 2_500];
 
 /** Inside this much of its end, a quiet connection's grant is refreshed. */
 export const REFRESH_GRANT_WITHIN_SECONDS = 30 * DAY_SECONDS;

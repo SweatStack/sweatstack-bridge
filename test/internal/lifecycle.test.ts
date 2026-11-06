@@ -221,7 +221,7 @@ describe("asking for history", () => {
     w.garmin.failures.backfill.push(403);
     await w.signIn(client, kari, { startedBy: starter.id });
     await w.settled();
-    expect(w.sleeps).toContain(1000);
+    expect(w.sleeps).toContain(500);
     expect(w.garmin.backfills).toHaveLength(3);
   });
 
@@ -305,10 +305,10 @@ describe("permissions", () => {
   });
 
   it("only waits seconds apart on a job's first run", async () => {
-    w.garmin.failures.permissions.push(...Array<number>(10).fill(403));
+    w.garmin.failures.permissions.push(...Array<number>(20).fill(403));
     await signedIn();
     const waited = w.sleeps.length;
-    expect(waited).toBe(3);
+    expect(waited).toBe(7);
     w.clock.now += 60;
     await w.cron();
     expect(w.sleeps).toHaveLength(waited);

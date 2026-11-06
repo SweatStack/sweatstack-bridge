@@ -51,7 +51,7 @@ describe("what the bridge stores", () => {
   });
 
   it("stores unknown permissions as unknown, not as none", async () => {
-    w.garmin.failures.permissions.push(...Array<number>(5).fill(403));
+    w.garmin.failures.permissions.push(...Array<number>(20).fill(403));
     const { sub } = await w.signIn(client, kari);
     await w.settled();
     expect((await connection(sub))?.permissions).toBeNull();

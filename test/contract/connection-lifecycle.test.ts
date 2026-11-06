@@ -29,6 +29,11 @@ const signedIn = async (account: ReturnType<typeof athlete>, options: { startedB
 };
 
 /** Contract: "Send the call again on a permission change". What was granted is Garmin's to say, never the body's. */
+/** How many times a job asks Garmin before it leaves the rest to later runs. */
+const ASKS_ON_A_FIRST_RUN = 8;
+/** A sign-in also asks once itself, before that job. */
+const ASKS_THROUGH_A_SIGN_IN = ASKS_ON_A_FIRST_RUN + 1;
+
 describe("a change of permissions", () => {
   beforeEach(() => setUp());
 
@@ -63,7 +68,7 @@ describe("a change of permissions", () => {
     const { sub } = await signedIn(kari);
     const before = capabilities(sub);
     kari.permissions = HISTORY_ONLY;
-    w.garmin.failures.permissions.push(503, 503, 503, 503);
+    w.garmin.failures.permissions.push(...Array<number>(ASKS_ON_A_FIRST_RUN).fill(503));
     await w.notify("user-permissions", w.garmin.permissionsChanged(kari));
     expect(capabilities(sub)).toEqual(before);
     w.clock.now += 60;
@@ -108,13 +113,19 @@ describe("permissions Garmin won't give right after consent", () => {
     const { sub } = await w.signIn(client, kari);
     expect(w.sweatstack.connectionCalls[0]?.capabilities).toMatchObject({ activity_history: "syncing" });
     await w.settled();
-    expect(w.sleeps.slice(0, 2)).toEqual([1000, 2000]);
+    expect(w.sleeps.slice(0, 2)).toEqual([500, 500]);
     expect(capabilities(sub)).toMatchObject({ activity_history: "action_required" });
+  });
+
+  it("asks often at first, so it's ready soon after Garmin is, and keeps at it for seven seconds", async () => {
+    w.garmin.failures.permissions.push(...Array<number>(ASKS_THROUGH_A_SIGN_IN).fill(403));
+    await signedIn(athlete(FILES_ONLY));
+    expect(w.sleeps).toEqual([500, 500, 500, 500, 1000, 1500, 2500]);
   });
 
   it("keeps asking on later runs when seconds weren't enough", async () => {
     const kari = athlete(FILES_ONLY);
-    w.garmin.failures.permissions.push(...Array<number>(5).fill(403));
+    w.garmin.failures.permissions.push(...Array<number>(ASKS_THROUGH_A_SIGN_IN).fill(403));
     const { sub } = await signedIn(kari);
     expect(capabilities(sub)).toMatchObject({ activity_history: "syncing" });
     w.clock.now += 60;
@@ -135,7 +146,7 @@ describe("permissions Garmin won't give right after consent", () => {
   });
 
   it("doesn't ask for history while it doesn't know", async () => {
-    w.garmin.failures.permissions.push(...Array<number>(5).fill(403));
+    w.garmin.failures.permissions.push(...Array<number>(ASKS_THROUGH_A_SIGN_IN).fill(403));
     await signedIn(athlete());
     expect(w.garmin.backfillRequests).toEqual([]);
   });
@@ -420,13 +431,13 @@ describe("asking Garmin for history", () => {
   it("waits a moment on a 403 right after consent, and doesn't leave it to the next run", async () => {
     w.garmin.failures.backfill.push(403, 403);
     const { sub } = await signedIn(athlete());
-    expect(w.sleeps.slice(0, 2)).toEqual([1000, 2000]);
+    expect(w.sleeps.slice(0, 2)).toEqual([500, 500]);
     expect(w.garmin.backfills).toHaveLength(3);
     expect(capabilities(sub)).toMatchObject({ activity_history: "ready" });
   });
 
   it("carries on later when the 403s don't stop", async () => {
-    w.garmin.failures.backfill.push(...Array<number>(4).fill(403));
+    w.garmin.failures.backfill.push(...Array<number>(ASKS_ON_A_FIRST_RUN).fill(403));
     const { sub } = await signedIn(athlete());
     expect(w.garmin.backfills).toEqual([]);
     expect(capabilities(sub)).toMatchObject({ activity_history: "syncing" });
