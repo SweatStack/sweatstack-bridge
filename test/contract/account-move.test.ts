@@ -117,11 +117,17 @@ describe("moving an existing SweatStack account", () => {
   it("stops asking every minute after the first hour: nobody takes that long, so it's an abandoned tab", async () => {
     w.sweatstack.offerMove("garmin-kari");
     await w.signIn(client, kari);
-    for (let minute = 0; minute < 70; minute += 1) await aMinuteLater();
+    await w.settled();
+
+    // Past the first hour in one go. Backoff then needs a few tries to grow beyond a minute.
+    w.clock.now += 61 * MINUTE;
+    await w.cron();
+    await aMinuteLater();
+    await aMinuteLater();
 
     const before = w.sweatstack.connectionCalls.length;
-    for (let minute = 0; minute < 30; minute += 1) await aMinuteLater();
-    expect(w.sweatstack.connectionCalls.length - before).toBeLessThanOrEqual(1);
+    await aMinuteLater();
+    expect(w.sweatstack.connectionCalls.length).toBe(before);
   });
 
   it("uploads to a new user when the athlete starts fresh", async () => {
