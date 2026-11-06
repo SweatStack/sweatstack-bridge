@@ -40,7 +40,7 @@ describe("what the bridge stores", () => {
     expect(results).toEqual([]);
   });
 
-  it("doesn't drop the state of a newer consent when an older call's answer comes in", async () => {
+  it("doesn't drop the state of a newer try when an older call's answer comes in", async () => {
     const user = w.sweatstack.createUser({});
     const { sub } = await w.signIn(client, kari, { startedBy: user.id });
     await env.DB.prepare("UPDATE connections SET rp_state = 'newer' WHERE sub = ?").bind(sub).run();
@@ -53,7 +53,7 @@ describe("what the bridge stores", () => {
     expect(await connection(sub)).toMatchObject({ user_id: expect.any(String), rp_state: null });
   });
 
-  it("drops the state once SweatStack has answered, even without a user: it's only for that first call", async () => {
+  it("doesn't store the state when SweatStack answers the first call, even without a user", async () => {
     const user = w.sweatstack.createUser({});
     const { sub } = await w.signIn(client, kari, { startedBy: user.id });
     expect(await connection(sub)).toMatchObject({ user_id: null, rp_state: null });

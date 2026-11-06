@@ -36,8 +36,10 @@ the usual backoff.
 **Someone with a SweatStack account.** The call after consent also carries the platform's id for the person, so
 that SweatStack can ask whether to move an account they already use with the app. It's only ever in memory, for
 that one call: `sub` stays the only id the bridge keeps. Until they answer, the answer is `user_id: null`, files
-wait, and the connection looks like any other waiting for its user. The flow's `state` goes after that first
-answer, because a later call that still carried it would make a new user and end the question. If that first
+wait, and the connection looks like any other waiting for its user. The flow's `state` is in memory for that call
+too, and goes on the row only if the call fails. A job can run at that very moment, because the platform's
+notifications arrive with the consent, and a call with the `state` and no id would make a new user and end the
+question. If that first
 call fails, nobody is asked: SweatStack makes a new user as for anyone.
 
 **History reads `ready` once every window has an answer and at least one was accepted.** The platform has no

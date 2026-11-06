@@ -43,7 +43,6 @@ export interface ConnectionRow {
 export interface Consent {
   sub: string;
   provider: string;
-  rpState: string;
   accessToken: string;
   refreshToken: string;
   accessExpiresAt: number;
@@ -181,10 +180,10 @@ export class Database {
     const saved = this.d1
       .prepare(
         `INSERT INTO connections
-           (sub, provider, rp_state, access_token, refresh_token, access_expires_at, refresh_expires_at, permissions, consented_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           (sub, provider, access_token, refresh_token, access_expires_at, refresh_expires_at, permissions, consented_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (sub) DO UPDATE SET
-           rp_state = CASE WHEN connections.user_id IS NULL THEN excluded.rp_state END,
+           rp_state = NULL,
            access_token = excluded.access_token,
            refresh_token = excluded.refresh_token,
            access_expires_at = excluded.access_expires_at,
@@ -195,7 +194,7 @@ export class Database {
            consented_at = excluded.consented_at`,
       )
       .bind(
-        consent.sub, consent.provider, consent.rpState, consent.accessToken, consent.refreshToken, consent.accessExpiresAt,
+        consent.sub, consent.provider, consent.accessToken, consent.refreshToken, consent.accessExpiresAt,
         consent.refreshExpiresAt, consent.permissions === null ? null : JSON.stringify(consent.permissions), consent.consentedAt,
       );
     const due = this.d1
@@ -279,7 +278,12 @@ export class Database {
     ]);
   }
 
-  /** SweatStack has answered the call this `state` was for. Only that one: a new consent may have brought another. */
+  /** The call after consent failed, so its retry needs the flow's `state`. */
+  async keepState(sub: string, state: string): Promise<void> {
+    await this.d1.prepare("UPDATE connections SET rp_state = ? WHERE sub = ?").bind(state, sub).run();
+  }
+
+  /** SweatStack has answered the retry this `state` was for. Only that one: a new try may have brought another. */
   async forgetState(sub: string, state: string): Promise<void> {
     await this.d1.prepare("UPDATE connections SET rp_state = NULL WHERE sub = ? AND rp_state = ?").bind(sub, state).run();
   }

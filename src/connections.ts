@@ -36,13 +36,14 @@ export function permissionsOf(connection: ConnectionRow): string[] | null {
  * Tells SweatStack what a connection provides, as it stands right now, and keeps the user it answers
  * with. The one function behind every such call, so duplicates and retries are harmless.
  *
- * The flow's `state` is for the first answered call only. A later one that still carried it could end a
- * question SweatStack is asking the athlete, by making the user. The platform's id for the person is known
- * only right after consent, and is never stored, so the one who passes it is the caller who has it.
+ * The call right after consent passes the flow's `state` and the platform's id for the person, which are
+ * only ever in memory. Everything else sends neither, even if it runs at that very moment: a call with the
+ * `state` and no id would make the user, and end a question SweatStack is asking the athlete. Only if that
+ * first call fails does the `state` go on the row, for the retry.
  *
  * @returns the user, or null while SweatStack doesn't know yet whose connection this is.
  */
-export async function declare(services: ConnectionServices, connection: ConnectionRow, platformUserId?: string): Promise<string | null> {
+export async function declare(services: ConnectionServices, connection: ConnectionRow, afterConsent?: { state: string; platformUserId: string }): Promise<string | null> {
   const { db, deps, provider } = services;
   const capabilities = provider.capabilityMap({
     permissions: permissionsOf(connection),
@@ -50,12 +51,18 @@ export async function declare(services: ConnectionServices, connection: Connecti
     backfillDone: connection.backfill_done_at !== null,
   });
 
-  // Only for a call during an authorization request, and only while the user is unknown.
-  const state = connection.user_id === null ? connection.rp_state : null;
-  const userId = await sendDeclaration(services, { provider: provider.name, subject: connection.sub, capabilities, state, platformUserId });
+  // Only while the user is unknown.
+  const state = connection.user_id === null ? (afterConsent?.state ?? connection.rp_state) : null;
+  const userId = await sendDeclaration(services, {
+    provider: provider.name,
+    subject: connection.sub,
+    capabilities,
+    state,
+    platformUserId: afterConsent?.platformUserId,
+  });
 
   if (userId !== null && userId !== connection.user_id) await db.setConnectionUser(connection.sub, userId, deps.now());
-  else if (state !== null) await db.forgetState(connection.sub, state);
+  else if (connection.rp_state !== null) await db.forgetState(connection.sub, connection.rp_state);
   return userId ?? connection.user_id;
 }
 

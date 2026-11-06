@@ -468,7 +468,7 @@ describe("a disconnect, against what happens meanwhile", () => {
 describe("the flow's state on the row", () => {
   const state = async (sub: string) => (await row(sub)).rp_state;
 
-  it("is kept only until SweatStack has answered the call it's for", async () => {
+  it("isn't stored when SweatStack answers the call after consent", async () => {
     await resetDatabase({ withSigningKey: true });
     const w = world();
     const client = await w.register();
@@ -485,7 +485,7 @@ describe("the flow's state on the row", () => {
     expect(await state(flow.sub)).toBeNull();
   });
 
-  it("stays when that call fails, so the retry can still carry it", async () => {
+  it("is stored when that call fails, for the retry, and goes with its answer", async () => {
     await resetDatabase({ withSigningKey: true });
     let refused = false;
     const w = world({
@@ -499,6 +499,50 @@ describe("the flow's state on the row", () => {
     const flow = await w.consent(client, kari);
     const { results } = await env.DB.prepare("SELECT rp_state FROM connections").all<{ rp_state: string | null }>();
     expect(results).toEqual([{ rp_state: flow.state }]);
+
+    w.clock.now += 60;
+    await w.cron();
+    const { results: after } = await env.DB.prepare("SELECT rp_state FROM connections").all<{ rp_state: string | null }>();
+    expect(after).toEqual([{ rp_state: null }]);
+  });
+  it("goes with the retry's answer even when that names no user yet", async () => {
+    await resetDatabase({ withSigningKey: true });
+    let refused = false;
+    const w = world({
+      intercept: (request) => {
+        if (request.method !== "PUT" || !request.url.includes("/connections/") || refused) return undefined;
+        refused = true;
+        return new Response(null, { status: 503 });
+      },
+    });
+    const client = await w.register();
+    const starter = w.sweatstack.createUser({});
+    const flow = await w.consent(client, kari, { startedBy: starter.id });
+    expect(await env.DB.prepare("SELECT rp_state FROM connections").first("rp_state")).toBe(flow.state);
+
+    w.clock.now += 60;
+    await w.cron();
+    expect(await env.DB.prepare("SELECT rp_state FROM connections").first("rp_state")).toBeNull();
+  });
+
+  it("is gone from the row while a new consent makes its call, so a job at that moment can't send it", async () => {
+    await resetDatabase({ withSigningKey: true });
+    let during: unknown = "not called";
+    const w = world({
+      intercept: async (request) => {
+        if (request.method === "PUT" && request.url.includes("/connections/")) {
+          during = await env.DB.prepare("SELECT rp_state FROM connections").first("rp_state");
+        }
+        return undefined;
+      },
+    });
+    const client = await w.register();
+    const starter = w.sweatstack.createUser({});
+    await w.consent(client, kari, { startedBy: starter.id });
+    await env.DB.prepare("UPDATE connections SET rp_state = 'from-an-earlier-try'").run();
+
+    await w.consent(client, kari, { startedBy: starter.id });
+    expect(during).toBeNull();
   });
 });
 

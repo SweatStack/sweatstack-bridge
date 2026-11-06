@@ -72,6 +72,24 @@ describe("moving an existing SweatStack account", () => {
     });
   });
 
+  it("can't lose the question to a job running at that moment: a ping from Garmin sets one off", async () => {
+    let raced = false;
+    w = world({
+      intercept: async (request) => {
+        if (raced || request.method !== "PUT" || !request.url.includes("/connections/")) return undefined;
+        raced = true;
+        await w.notify("user-permissions", w.garmin.permissionsChanged(kari));
+        return undefined;
+      },
+    });
+    client = await w.register();
+    w.sweatstack.offerMove("garmin-kari");
+    const { sub } = await w.signIn(client, kari);
+    await w.settled();
+    expect(raced).toBe(true);
+    expect(userOf(sub)).toBeNull();
+  });
+
   it("uploads to the old account once it has moved", async () => {
     const account = w.sweatstack.offerMove("garmin-kari");
     const { sub } = await w.signIn(client, kari);

@@ -33,8 +33,8 @@ export async function platformCallback(c: PlatformContext): Promise<Response> {
     if (subjectKey === null) throw new Error("The database has no subject key");
     const sub = await deriveSubject(subjectKey, provider.name, platformUserId);
     const followUps = permissions === null ? (["permissions_change"] as const) : provider.mayBackfill(permissions) ? (["backfill"] as const) : [];
-    await db.saveConsent({ sub, provider: provider.name, rpState: flow.rp_state, ...tokens, permissions, consentedAt: deps.now() }, [...followUps]);
-    await declareAfterConsent({ config, db, deps, provider }, sub, platformUserId);
+    await db.saveConsent({ sub, provider: provider.name, ...tokens, permissions, consentedAt: deps.now() }, [...followUps]);
+    await declareAfterConsent({ config, db, deps, provider }, sub, { state: flow.rp_state, platformUserId });
     await db.issueCode(flow.id, await hashSecret(issued), sub, deps.now() + CODE_LIFETIME_SECONDS);
   } catch (failure) {
     log("consent_failed", {

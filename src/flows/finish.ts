@@ -15,16 +15,17 @@ const RETRY_AFTER_SECONDS = 60;
  * when the browser returns if this didn't work. A job sees to whatever's left, including a connection
  * still waiting for its user, so this holds even if the Worker stops right after.
  */
-export async function declareAfterConsent(services: ConnectionServices, sub: string, platformUserId: string): Promise<void> {
+export async function declareAfterConsent(services: ConnectionServices, sub: string, afterConsent: { state: string; platformUserId: string }): Promise<void> {
   const { db, deps, provider } = services;
   const connection = await db.connection(sub);
   if (connection === null) return;
 
   let userId: string | null = null;
   try {
-    userId = await declare(services, connection, platformUserId);
+    userId = await declare(services, connection, afterConsent);
   } catch (error) {
     log("connection_call_failed", { provider: provider.name, status: error instanceof SweatStackError ? (error.status ?? null) : null });
+    if (connection.user_id === null) await db.keepState(sub, afterConsent.state);
   }
   const now = deps.now();
   if (userId === null) {
