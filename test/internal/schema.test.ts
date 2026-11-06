@@ -1,5 +1,6 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
+import { Database } from "../../src/db";
 import { resetDatabase } from "../support/world";
 
 const meta = async (key: string) =>
@@ -40,5 +41,17 @@ describe("the inbox", () => {
     await addJob("declare", null);
     const second = await addJob("declare", null);
     expect(second.meta.changes).toBe(1);
+  });
+
+  it("never reuses an id, so a Worker finishing a deleted job can't finish the job that came after it", async () => {
+    const db = new Database(env.DB);
+    await addJob("activity_file", "activity-1");
+    const relaying = await db.claimJob(0, 300, null);
+
+    await db.forgetDisconnected("a-subject", "garmin_connect", 0, 0);
+    await db.finishJob(relaying!.id, 0, null);
+
+    const { results } = await env.DB.prepare("SELECT kind, done_at FROM inbox").all();
+    expect(results).toEqual([{ kind: "declare", done_at: null }]);
   });
 });
