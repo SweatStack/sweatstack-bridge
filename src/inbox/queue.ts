@@ -14,7 +14,8 @@ export type JobResult =
   | { outcome: "done" }
   /** Went fine, and there's more of it: back in line right away, so the run's budget still applies. */
   | { outcome: "continue" }
-  | { outcome: "retry"; reason: string }
+  /** Tries again with the usual backoff, or after `afterSeconds` for a job that knows better. */
+  | { outcome: "retry"; reason: string; afterSeconds?: number }
   | { outcome: "give_up"; reason: string };
 
 export function claimNext(db: Database, now: number, sub: string | null): Promise<JobRow | null> {
@@ -29,7 +30,8 @@ export async function settle(db: Database, job: JobRow, result: JobResult, now: 
   } else if (result.outcome === "give_up" || now - job.received_at >= GIVE_UP_AFTER_SECONDS) {
     await db.finishJob(job.id, now, result.reason);
   } else {
-    const delay = Math.min(FIRST_RETRY_SECONDS * 2 ** Math.max(job.attempts - 1, 0), MAX_RETRY_SECONDS);
+    const backoff = Math.min(FIRST_RETRY_SECONDS * 2 ** Math.max(job.attempts - 1, 0), MAX_RETRY_SECONDS);
+    const delay = (result.outcome === "retry" ? result.afterSeconds : undefined) ?? backoff;
     await db.retryJob(job.id, now + delay, result.reason);
   }
 }

@@ -88,6 +88,13 @@ async function relayFile(services: ConnectionServices, connection: ConnectionRow
   return outcome.accepted ? { outcome: "done" } : { outcome: "give_up", reason: "file_refused_by_sweatstack" };
 }
 
+/**
+ * SweatStack doesn't say when it knows the user, and an athlete may be reading a page before it does. So at
+ * first the bridge asks every minute, the most the cron allows, or their first files would wait for a backoff
+ * that had nothing to do with them. After this long it's an abandoned tab, and the usual backoff is right.
+ */
+const ASK_EVERY_MINUTE_FOR_SECONDS = 60 * 60;
+
 /** Sends the connection as it is now, so the order and number of these jobs doesn't matter. */
 async function declareJob(services: ConnectionServices, connection: ConnectionRow | null, job: JobRow): Promise<JobResult> {
   if (connection === null) {
@@ -100,7 +107,9 @@ async function declareJob(services: ConnectionServices, connection: ConnectionRo
     await deleteConnection(services, services.provider.name, job.sub);
     return { outcome: "done" };
   }
-  return userId === null ? { outcome: "retry", reason: "waiting_for_user" } : { outcome: "done" };
+  if (userId !== null) return { outcome: "done" };
+  const justConsented = services.deps.now() - connection.consented_at < ASK_EVERY_MINUTE_FOR_SECONDS;
+  return { outcome: "retry", reason: "waiting_for_user", ...(justConsented ? { afterSeconds: 60 } : {}) };
 }
 
 function classify(error: unknown): JobResult {

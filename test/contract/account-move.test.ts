@@ -102,6 +102,28 @@ describe("moving an existing SweatStack account", () => {
     expect(w.sweatstack.uploads.map((upload) => [upload.userId, upload.externalId])).toEqual([[account.id, "1001"]]);
   });
 
+  it("uploads within about a minute of the answer, even after ten minutes on the page", async () => {
+    const account = w.sweatstack.offerMove("garmin-kari");
+    const { sub } = await w.signIn(client, kari);
+    await w.ping(w.garmin.fileReady(kari, "1001"));
+    for (let minute = 0; minute < 10; minute += 1) await aMinuteLater();
+
+    w.sweatstack.accountMoved(sub, account.id);
+    await aMinuteLater();
+
+    expect(w.sweatstack.uploads.map((upload) => upload.userId)).toEqual([account.id]);
+  });
+
+  it("stops asking every minute after the first hour: nobody takes that long, so it's an abandoned tab", async () => {
+    w.sweatstack.offerMove("garmin-kari");
+    await w.signIn(client, kari);
+    for (let minute = 0; minute < 70; minute += 1) await aMinuteLater();
+
+    const before = w.sweatstack.connectionCalls.length;
+    for (let minute = 0; minute < 30; minute += 1) await aMinuteLater();
+    expect(w.sweatstack.connectionCalls.length - before).toBeLessThanOrEqual(1);
+  });
+
   it("uploads to a new user when the athlete starts fresh", async () => {
     const account = w.sweatstack.offerMove("garmin-kari");
     const { sub, state } = await w.signIn(client, kari);

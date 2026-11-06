@@ -43,6 +43,10 @@ notifications arrive with the consent, and a call with the `state` and no id wou
 question. If that first
 call fails, nobody is asked: SweatStack makes a new user as for anyone.
 
+SweatStack doesn't tell the bridge when it knows a user, so a connection waiting for one asks every minute for its
+first hour, and then backs off as any job does. The first files never wait much longer than a minute after the
+athlete has answered.
+
 **History reads `ready` once every window has an answer and at least one was accepted.** The platform has no
 signal for "finished", and files keep arriving afterwards. If it accepted none, the connection stays `syncing`,
 which SweatStack ends after 24 hours, and the next consent or permission change asks again.
