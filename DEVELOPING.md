@@ -150,9 +150,12 @@ never needs to.
 - **`test/internal/`** covers what SweatStack can't see.
 - **`test/fake-check/`** runs the same calls against the fake SweatStack and a real one, because the contract
   tests only prove the bridge matches the fake.
+- **`test/fixtures/garmin/wellness.json`** is shared: Garmin's health summaries and the dailies they must
+  become. SweatStack keeps a copy and runs its own Garmin mappers over it, so an athlete gets the same dailies
+  from SweatStack's Garmin connection and from a bridge. Change a case here, then tell SweatStack to copy it.
 
-To run that last one against a real SweatStack, use a test app with no real users, with write ticked for
-Activities and its Garmin card set to Self-hosted. Each run deletes and recreates one test user,
+To run the fake checks against a real SweatStack, use a test app with no real users, with write ticked for
+Activities and Wellness and its Garmin card set to Self-hosted. Without Wellness, the daily checks skip and say so. Each run deletes and recreates one test user,
 found by the reference `bridge-fake-check`:
 
 ```sh
