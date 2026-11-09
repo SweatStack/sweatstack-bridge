@@ -7,6 +7,7 @@ wearable platform steps here are Garmin's. [DEVELOPING.md](DEVELOPING.md) explai
 - [Deploy](#deploy)
 - [Settings](#settings)
 - [Run it](#run-it): check on it, update it
+- [Back up and restore](#back-up-and-restore)
 - [Set up Garmin's notifications](#set-up-garmins-notifications)
 - [Fix a missing Disconnect button](#fix-a-missing-disconnect-button)
 - [Try a sign-in again](#try-a-sign-in-again)
@@ -42,8 +43,8 @@ If your app already has athletes who use it with Garmin through SweatStack, emai
 Three things to get right from the start:
 
 - **Decide on your address before step 4, so you only paste the URLs once.** Your bridge starts at `https://sweatstack-bridge.<your-subdomain>.workers.dev`, and you can keep it: athletes only pass through it during sign-in. Use your own domain if you want the bridge to stay at one address wherever it runs, or don't want to show your Cloudflare subdomain. The domain has to be on Cloudflare in the same account. Then add `"routes": [{ "pattern": "garmin.example.com", "custom_domain": true }]` to `wrangler.jsonc`. Moving later means repeating steps 4 and 6.
-- **Don't delete the D1 database.** Without it, every athlete has to connect again and comes back as a new user. `npx wrangler d1 export` makes a backup. The file holds their tokens, so keep it safe.
-- **Deploy one bridge per Cloudflare account, or rename its database.** A second copy with the same `database_name` attaches to the first copy's database, and shares its tokens.
+- **Don't delete the D1 database.** Without it, every athlete has to connect again and comes back as a new user. See [Back up and restore](#back-up-and-restore).
+- **A second bridge in the same Cloudflare account, such as a test setup, needs its own name and database.** A copy with the same `database_name` attaches to the first copy's database, and shares its tokens. The button deploys before you can change that, so don't use it for the second one. Clone this repository, change `name` and `database_name` in `wrangler.jsonc`, then run `npm ci` and `npm run deploy`. Continue from step 2. Where a step says push, run `npm run deploy` again.
 
 ## Settings
 
@@ -86,6 +87,57 @@ npm run update -- v0.2.0  # to a specific one
 It applies what changed between two releases and keeps your own edits, marking any real clash. Review the result,
 commit and push: nothing published upstream changes your deployment until you do. To hear about releases on GitHub,
 choose Watch, Custom, Releases on this repository.
+
+## Back up and restore
+
+The bridge's database holds every athlete's connection and their platform tokens. Lose it, and each athlete
+has to connect again and comes back as a new user. Cloudflare keeps 30 days of its history, so most mistakes
+can be undone in place. A file is only needed if the database itself is deleted.
+
+The commands use the database name `sweatstack-bridge`. If you changed `database_name` in `wrangler.jsonc`,
+use yours.
+
+### Undo a change: go back to a moment in time
+
+Before anything risky, such as a manual change in the database, note the current bookmark:
+
+```sh
+npx wrangler d1 time-travel info sweatstack-bridge
+```
+
+To go back, give that bookmark, or a moment within the last 30 days:
+
+```sh
+npx wrangler d1 time-travel restore sweatstack-bridge --bookmark <bookmark>
+npx wrangler d1 time-travel restore sweatstack-bridge --timestamp 2026-11-09T10:00:00Z
+```
+
+It asks to confirm, then prints a bookmark that undoes the restore. Everything written after that moment
+is gone: athletes who connected since connect again, and files the platform announced since aren't
+relayed. Check with `npm run status` afterwards.
+
+### Keep a copy as a file
+
+```sh
+npx wrangler d1 export sweatstack-bridge --remote --output bridge-backup.sql
+```
+
+The file holds every athlete's platform tokens. Keep it as safe as your platform's client secret, and
+not in your repository. A copy is only as recent as its file, so make one before a change you're unsure
+of.
+
+### Restore the file into a new database
+
+Only when the database was deleted:
+
+```sh
+npx wrangler d1 create sweatstack-bridge
+npx wrangler d1 execute sweatstack-bridge --remote --file bridge-backup.sql
+```
+
+Put the `database_id` that `d1 create` printed into `wrangler.jsonc`, then commit and push. The bridge
+comes back with its signing key and every connection in the file. Athletes who connected after the file
+was made connect again.
 
 ## Set up Garmin's notifications
 
