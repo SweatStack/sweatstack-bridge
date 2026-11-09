@@ -52,6 +52,29 @@ interface Connection extends Declaration {
 /** Who started a flow: nobody for a sign-in, a user for a connect from their Portal. */
 type StartedBy = string | null;
 
+/** A day as SweatStack stores it: the value, and who wrote it from where. */
+export interface StoredDaily {
+  measure: string;
+  date: string;
+  value: number;
+  writer: "athlete" | "application" | "sweatstack";
+  application_id: string | null;
+  platform: string | null;
+}
+
+/**
+ * The measures the bridge writes, with SweatStack's ranges, both ends included, in each one's unit. The
+ * others SweatStack has (sleep altitude, the menstrual cycle day) aren't modelled, so here they're refused.
+ */
+const DAILY_RANGES: Readonly<Record<string, readonly [number, number]>> = {
+  body_mass: [0, 500],
+  body_fat_pct: [0, 100],
+  resting_hr: [0, 250],
+  hrv: [0, 500],
+  sleep_duration: [0, 86400],
+};
+const CALENDAR_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
 const CAPABILITIES = ["activities", "activity_history", "wellness", "workouts"];
 const STATUSES = ["ready", "syncing", "action_required", "unavailable"];
 const TOKEN_LIFETIME_SECONDS = 900;
@@ -102,6 +125,9 @@ export class FakeSweatStack {
   readonly mintedScopes: string[][] = [];
   /** What each connection call said, in order, for a test of how a connection's state changed. */
   readonly connectionCalls: { subject: string; capabilities: Record<string, string>; state?: string; platformUserId?: string }[] = [];
+  /** Every daily value a write changed, in order. A value equal to the day's isn't one. */
+  readonly dailyWrites: (StoredDaily & { userId: string })[] = [];
+  private readonly storedDailies = new Map<string, StoredDaily>();
   /** The accounts asked to move, by the platform's id for the person. */
   private readonly moveOffers = new Map<string, string>();
   /** Subject to user. Outlives a disconnect, so the same platform account is the same user. */
@@ -173,6 +199,20 @@ export class FakeSweatStack {
   /** The athlete answered yes and proved the account is theirs: the subject now belongs to the old account. */
   accountMoved(subject: string, accountId: string): void {
     this.link(subject, accountId);
+  }
+
+  /** A day someone wrote before, as the athlete in SweatStack or SweatStack's own Garmin connection would have. */
+  storeDaily(userId: string, daily: StoredDaily): void {
+    this.storedDailies.set(`${userId} ${daily.measure} ${daily.date}`, { ...daily });
+  }
+
+  daily(userId: string, measure: string, date: string): StoredDaily | undefined {
+    return this.storedDailies.get(`${userId} ${measure} ${date}`);
+  }
+
+  /** Every day stored for a user. */
+  dailies(userId: string): StoredDaily[] {
+    return [...this.storedDailies].filter(([key]) => key.startsWith(`${userId} `)).map(([, daily]) => daily);
   }
 
   createUser(fields: Partial<FakeUser>): FakeUser {
@@ -402,6 +442,38 @@ export class FakeSweatStack {
         }),
       );
       return c.json({ sources }, 202);
+    });
+
+    // One value, replacing what the day held: an app replaces anything, whoever wrote it. A day that
+    // already holds the value keeps its writer. Answers the day as stored.
+    app.post("/api/v1/dailies/:measure", async (c) => {
+      const issued = this.bearer(c);
+      if (!issued) return c.json({ detail: "No or invalid token provided" }, 401);
+      if (issued.client) return c.json({ detail: "A client token can't be used here." }, 403);
+      if (!issued.scopes.includes("wellness:write")) {
+        return c.json({ detail: `Insufficient scopes: ${JSON.stringify(issued.scopes)} does not contain wellness:write.` }, 403);
+      }
+      const measure = c.req.param("measure");
+      const range = Object.hasOwn(DAILY_RANGES, measure) ? DAILY_RANGES[measure] : undefined;
+      if (range === undefined) return c.json({ detail: `Unknown measure: ${measure}.` }, 422);
+      const body = await c.req.json<{ date?: unknown; value?: unknown; platform?: unknown }>().catch(() => null);
+      const { date, value, platform = null } = body ?? {};
+      if (typeof date !== "string" || !CALENDAR_DATE.test(date) || typeof value !== "number" || !Number.isFinite(value)) {
+        return c.json({ detail: "Send a date and a value." }, 422);
+      }
+      if (platform !== null && (typeof platform !== "string" || !PLATFORM_NAME.test(platform))) {
+        return c.json({ detail: `A platform is a name like garmin_connect: ${PLATFORM_NAME.source}.` }, 422);
+      }
+      if (value < range[0] || value > range[1]) return c.json({ detail: `${measure} must be in the range [${range[0]}, ${range[1]}], got ${value}` }, 422);
+
+      const stored = this.daily(issued.sub, measure, date);
+      if (stored === undefined || stored.value !== value) {
+        const written: StoredDaily = { measure, date, value, writer: "application", application_id: this.appId, platform };
+        this.storeDaily(issued.sub, written);
+        this.dailyWrites.push({ userId: issued.sub, ...written });
+      }
+      const day = this.daily(issued.sub, measure, date) as StoredDaily;
+      return c.json({ date, value: day.value, status: "stored", writer: day.writer, application_id: day.application_id, platform: day.platform });
     });
   }
 

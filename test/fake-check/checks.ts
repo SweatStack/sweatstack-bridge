@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
  * The calls the bridge makes, checked against a SweatStack: the fake in CI, a real one with
  * `npm run test:staging`. They're the only reason to believe the contract tests, because those only
  * prove the bridge matches the fake. Covers what's released: the client credentials grant,
- * the management API, declared connections and the upload relay.
+ * the management API, declared connections, the upload relay and daily values.
  *
  * Safe to repeat against a real test app: it replaces its one test user, found by its reference, at
  * the start of each run.
@@ -225,6 +225,68 @@ export function checks(name: string, target: () => Target): void {
       const again = await upload(userToken);
       const repeated = (await again.json()) as { sources: { id: string }[] };
       expect(repeated.sources[0]?.id).toBe(sources[0]?.id);
+    });
+
+    describe("a daily value, as the bridge writes one", () => {
+      const DAY = "2026-01-01";
+      let wellnessToken: string | null = null;
+
+      const writeDaily = (token: string, measure: string, body: object) =>
+        t.fetch(`${t.url}/api/v1/dailies/${measure}`, {
+          method: "POST",
+          headers: bearer(token, { "Content-Type": "application/json" }),
+          body: JSON.stringify(body),
+        });
+
+      // The test app has to have write ticked for Wellness, as an owner relaying wellness does.
+      const skipWithoutWellness = (context: { skip: (note?: string) => void }) => {
+        if (wellnessToken === null) context.skip("the test app doesn't have write ticked for Wellness");
+        return wellnessToken as string;
+      };
+
+      beforeAll(async () => {
+        const response = await mint(clientToken, { scope: "wellness:write" });
+        wellnessToken = response.ok ? ((await response.json()) as { access_token: string }).access_token : null;
+      });
+
+      it("stores it as the app's, naming the platform, and a later value replaces it", async (context) => {
+        const token = skipWithoutWellness(context);
+        const first = await writeDaily(token, "resting_hr", { date: DAY, value: 50, platform: PROVIDER });
+        await expectStatus(first, 200);
+        expect(await first.json()).toMatchObject({ date: DAY, value: 50, status: "stored", writer: "application", application_id: t.appId, platform: PROVIDER });
+
+        const later = await writeDaily(token, "resting_hr", { date: DAY, value: 49, platform: PROVIDER });
+        await expectStatus(later, 200);
+        expect(await later.json()).toMatchObject({ value: 49, writer: "application", platform: PROVIDER });
+      });
+
+      it("takes each measure the bridge writes, in its unit", async (context) => {
+        const token = skipWithoutWellness(context);
+        for (const [measure, value] of [["sleep_duration", 27000], ["body_mass", 70.3], ["body_fat_pct", 17.1], ["hrv", 44]] as const) {
+          const response = await writeDaily(token, measure, { date: DAY, value, platform: PROVIDER });
+          await expectStatus(response, 200);
+          expect(await response.json()).toMatchObject({ value });
+        }
+      });
+
+      it("refuses a value outside the measure's range, and stores nothing", async (context) => {
+        const token = skipWithoutWellness(context);
+        await expectStatus(await writeDaily(token, "body_mass", { date: "2026-01-02", value: 80, platform: PROVIDER }), 200);
+        expect((await writeDaily(token, "body_mass", { date: "2026-01-02", value: 751.7, platform: PROVIDER })).status).toBe(422);
+        // Writing the value it held answers with the day as stored: still that value.
+        expect(await (await writeDaily(token, "body_mass", { date: "2026-01-02", value: 80, platform: PROVIDER })).json()).toMatchObject({ value: 80 });
+      });
+
+      it("refuses a platform that isn't a name, and a measure it doesn't know", async (context) => {
+        const token = skipWithoutWellness(context);
+        expect((await writeDaily(token, "resting_hr", { date: DAY, value: 50, platform: "Garmin Connect" })).status).toBe(422);
+        expect((await writeDaily(token, "no_such_measure", { date: DAY, value: 50, platform: PROVIDER })).status).toBe(422);
+      });
+
+      it("refuses a token without wellness:write, and a client token", async () => {
+        expect((await writeDaily(userToken, "resting_hr", { date: DAY, value: 50, platform: PROVIDER })).status).toBe(403);
+        expect((await writeDaily(clientToken, "resting_hr", { date: DAY, value: 50, platform: PROVIDER })).status).toBe(403);
+      });
     });
   });
 }

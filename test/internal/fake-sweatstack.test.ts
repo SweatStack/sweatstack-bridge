@@ -173,6 +173,36 @@ describe("the fake's upload", () => {
   });
 });
 
+/** What `test/fake-check` can't set up on a real SweatStack: a day someone else wrote first. */
+describe("the fake's dailies", () => {
+  const write = async (fake: FakeSweatStack, userId: string, value: number) => {
+    const { access_token: token } = (await (await mint(fake, userId, "wellness:write")).json()) as { access_token: string };
+    return fake.fetch(
+      new Request(`${fake.url}/api/v1/dailies/body_mass`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ date: "2026-11-08", value, platform: "garmin_connect" }),
+      }),
+    );
+  };
+
+  it("lets an app's write replace what the athlete wrote", async () => {
+    const fake = new FakeSweatStack({ defaultScopes: ["wellness:write"] });
+    const { id } = fake.createUser({});
+    fake.storeDaily(id, { measure: "body_mass", date: "2026-11-08", value: 70, writer: "athlete", application_id: null, platform: null });
+    expect(await (await write(fake, id, 71)).json()).toMatchObject({ value: 71, writer: "application", platform: "garmin_connect" });
+    expect(fake.daily(id, "body_mass", "2026-11-08")).toMatchObject({ value: 71, writer: "application", application_id: fake.appId });
+  });
+
+  it("keeps the writer of a day that already holds the value", async () => {
+    const fake = new FakeSweatStack({ defaultScopes: ["wellness:write"] });
+    const { id } = fake.createUser({});
+    fake.storeDaily(id, { measure: "body_mass", date: "2026-11-08", value: 70, writer: "athlete", application_id: null, platform: null });
+    expect(await (await write(fake, id, 70)).json()).toMatchObject({ value: 70, writer: "athlete", platform: null });
+    expect(fake.dailyWrites).toEqual([]);
+  });
+});
+
 describe("the fake's signed tokens", () => {
   const verify = async (fake: FakeSweatStack, token: string, typ: string) => {
     const jwks = createRemoteJWKSet(new URL(`${fake.url}/.well-known/jwks.json`), {
