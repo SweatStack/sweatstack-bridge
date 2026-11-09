@@ -13,6 +13,8 @@ wearable platform steps here are Garmin's. [DEVELOPING.md](DEVELOPING.md) explai
 
 ## Before you start
 
+If your app already has athletes who use it with Garmin through SweatStack, email [info@sweatstack.no](mailto:info@sweatstack.no) before you deploy. We help you move them, and they keep their history.
+
 - [ ] A [live app on SweatStack](https://docs.sweatstack.no/learn/applications/going-live/) with **write** ticked for Activities under "Data your app uses". Without it, SweatStack refuses every file
 - [ ] [Keys from Garmin's developer program](https://docs.sweatstack.no/learn/integrations/garmin/). Request them early: it's the one step whose timing you don't control
 - [ ] A Cloudflare account on the [Workers Paid plan](https://developers.cloudflare.com/workers/platform/pricing/): USD 5 a month, which covers a small app. The free plan's CPU limit is too tight for the bridge

@@ -19,6 +19,7 @@ Wearable platform (Garmin)  ──►  Bridge, in your Cloudflare account  ─�
 | To | Read |
 |---|---|
 | Deploy a bridge | [Runbook: Before you start](RUNBOOK.md#before-you-start) |
+| Move athletes who already use your app with Garmin through SweatStack | Email [info@sweatstack.no](mailto:info@sweatstack.no) before you deploy. We help you move them, and they keep their history |
 | Get Garmin keys and permissions | [Set up Garmin Connect](https://docs.sweatstack.no/learn/integrations/garmin/) |
 | See what changes for your users | [What athletes see](https://docs.sweatstack.no/learn/applications/self-hosted-integrations/#what-athletes-see-on-your-sign-in-screen) |
 | Check on it, or update it | [Runbook: Run it](RUNBOOK.md#run-it) |
