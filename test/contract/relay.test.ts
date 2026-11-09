@@ -17,11 +17,11 @@ describe("relaying a file", () => {
     userId = w.sweatstack.connections.get(sub)?.userId as string;
   });
 
-  it("uploads a file as the athlete, deduplicated on the platform's activity id", async () => {
+  it("uploads a file as the athlete, naming the platform, deduplicated on the platform's activity id", async () => {
     const response = await w.ping(w.garmin.fileReady(kari, "1001"));
     expect(response.status).toBe(200);
     expect(w.sweatstack.uploads).toEqual([
-      { userId, externalId: "1001", provider: "garmin_connect", filename: "1001.fit", content: "FIT-1001" },
+      { userId, externalId: "1001", platform: "garmin_connect", filename: "1001.fit", content: "FIT-1001" },
     ]);
   });
 

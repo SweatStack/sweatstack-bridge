@@ -128,19 +128,21 @@ async function userToken(services: SweatStackServices, userId: string): Promise<
 }
 
 /**
- * Relays one file, as the athlete. SweatStack dedupes on `externalId`, so every retry is safe.
+ * Relays one file, as the athlete. SweatStack dedupes on `externalId`, so every retry is safe. It reads
+ * `platform` to attribute the file, to count it for the connection, and to recognise a file an account
+ * that moved to the app already holds, which it then takes over instead of storing twice.
  *
  * @returns whether SweatStack took the file, as opposed to refusing that file in particular.
  */
 export async function uploadActivityFile(
   services: SweatStackServices,
-  upload: { userId: string; provider: string; externalId: string; file: DownloadedFile },
+  upload: { userId: string; platform: string; externalId: string; file: DownloadedFile },
 ): Promise<{ accepted: boolean }> {
   const attempt = async () => {
     const form = new FormData();
     form.append("files", new File([upload.file.bytes], upload.file.filename));
     form.append("external_id", upload.externalId);
-    form.append("provider", upload.provider);
+    form.append("platform", upload.platform);
     return call(
       services,
       "/api/v1/activities/upload",

@@ -81,7 +81,7 @@ async function relayFile(services: ConnectionServices, connection: ConnectionRow
 
   const outcome = await uploadActivityFile(services, {
     userId: connection.user_id,
-    provider: provider.name,
+    platform: provider.name,
     externalId: job.external_id,
     file,
   });

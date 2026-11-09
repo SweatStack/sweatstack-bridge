@@ -56,6 +56,8 @@ const CAPABILITIES = ["activities", "activity_history", "wellness", "workouts"];
 const STATUSES = ["ready", "syncing", "action_required", "unavailable"];
 const TOKEN_LIFETIME_SECONDS = 900;
 const MAX_FILES = 10;
+/** A platform's name on a write, as SweatStack checks it. Aliases such as `garmin` aren't modelled: the bridge sends none. */
+const PLATFORM_NAME = /^[a-z][a-z0-9_]{0,39}$/;
 const NOT_FOUND = { detail: "Not found." };
 
 export interface DisconnectEvent {
@@ -89,7 +91,7 @@ export class FakeSweatStack {
   /** Everything sent to it, in order, for a test to assert on. */
   readonly calls: { method: string; path: string }[] = [];
   readonly users = new Map<string, FakeUser>();
-  readonly uploads: { userId: string; externalId: string | null; provider: string | null; filename: string; content: string }[] = [];
+  readonly uploads: { userId: string; externalId: string | null; platform: string | null; filename: string; content: string }[] = [];
   /** Files the relay refuses at the door, by external id, as it does a file it can't read. */
   readonly refusedFiles = new Set<string>();
   /** From the routes by user id, for an app with its own sign-in, as `user:provider`. */
@@ -373,19 +375,30 @@ export class FakeSweatStack {
       const files = form.getAll("files").filter((file): file is File => file instanceof File);
       if (files.length === 0 || files.length > MAX_FILES) return c.json({ detail: "Send 1 to 10 files." }, 400);
       const externalIds = form.getAll("external_id").map(String);
-      const provider = form.get("provider");
+      // SweatStack's rule for a platform's name. It ignores `provider`, the field's name before.
+      const sent = form.get("platform");
+      const platform = typeof sent === "string" ? sent : null;
+      if (sent !== null && (platform === null || !PLATFORM_NAME.test(platform))) {
+        return c.json({ detail: `A platform is a name like garmin_connect: ${PLATFORM_NAME.source}.` }, 422);
+      }
       const sources = await Promise.all(
         files.map(async (file, index) => {
           const externalId = externalIds[index] ?? null;
           this.uploads.push({
             userId: issued.sub,
             externalId,
-            provider: typeof provider === "string" ? provider : null,
+            platform,
             filename: file.name,
             content: await file.text(),
           });
           const refused = externalId !== null && this.refusedFiles.has(externalId);
-          return { id: this.sourceId(issued.sub, externalId), status: refused ? "failed" : "processing" };
+          return {
+            id: this.sourceId(issued.sub, externalId),
+            status: refused ? "failed" : "processing",
+            writer: "application",
+            application_id: this.appId,
+            platform,
+          };
         }),
       );
       return c.json({ sources }, 202);

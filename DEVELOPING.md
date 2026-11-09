@@ -11,8 +11,8 @@ things that share only a user id:
   platform's consent, starts the backfill, tells SweatStack what the connection provides, and hands back an
   ID token. SweatStack makes or finds the user; the bridge never creates one.
 - **A client of SweatStack's public API.** The platform pings the bridge when a file is ready. The bridge
-  acknowledges at once, queues the work in D1, downloads the file and uploads it to SweatStack, deduplicated
-  on the platform's activity id. A cron trigger every minute handles retries.
+  acknowledges at once, queues the work in D1, downloads the file and uploads it to SweatStack, naming the
+  platform and deduplicated on the platform's activity id. A cron trigger every minute handles retries.
 
 ### The job queue
 

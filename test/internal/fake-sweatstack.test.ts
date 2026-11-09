@@ -85,39 +85,42 @@ describe("the fake's federation", () => {
   });
 });
 
+/** A user token for `userId`, minted as the bridge does: a client token first. */
+async function mint(fake: FakeSweatStack, userId: string, scope?: string): Promise<Response> {
+  const basic = `Basic ${btoa(`${fake.appId}:${fake.clientSecret}`)}`;
+  const client = await fake.fetch(
+    new Request(`${fake.url}/api/v1/oauth/token`, {
+      method: "POST",
+      headers: { Authorization: basic },
+      body: new URLSearchParams({ grant_type: "client_credentials" }),
+    }),
+  );
+  const { access_token: clientToken } = (await client.json()) as { access_token: string };
+  return fake.fetch(
+    new Request(`${fake.url}/api/v1/applications/${fake.appId}/users/${userId}/token`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${clientToken}`, "Content-Type": "application/json" },
+      ...(scope === undefined ? {} : { body: JSON.stringify({ scope }) }),
+    }),
+  );
+}
+
+/** Relays one file as `userId`, with any other form fields given. */
+async function relay(fake: FakeSweatStack, userId: string, fields: Record<string, string> = {}): Promise<Response> {
+  const { access_token: userToken } = (await (await mint(fake, userId)).json()) as { access_token: string };
+  const form = new FormData();
+  form.append("files", new File([new Uint8Array([0])], "a.fit"));
+  for (const [name, value] of Object.entries(fields)) form.append(name, value);
+  return fake.fetch(
+    new Request(`${fake.url}/api/v1/activities/upload`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${userToken}` },
+      body: form,
+    }),
+  );
+}
+
 describe("the fake's scopes", () => {
-  const mint = async (fake: FakeSweatStack, userId: string, scope?: string) => {
-    const basic = `Basic ${btoa(`${fake.appId}:${fake.clientSecret}`)}`;
-    const client = await fake.fetch(
-      new Request(`${fake.url}/api/v1/oauth/token`, {
-        method: "POST",
-        headers: { Authorization: basic },
-        body: new URLSearchParams({ grant_type: "client_credentials" }),
-      }),
-    );
-    const { access_token: clientToken } = (await client.json()) as { access_token: string };
-    return fake.fetch(
-      new Request(`${fake.url}/api/v1/applications/${fake.appId}/users/${userId}/token`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${clientToken}`, "Content-Type": "application/json" },
-        ...(scope === undefined ? {} : { body: JSON.stringify({ scope }) }),
-      }),
-    );
-  };
-
-  const relay = async (fake: FakeSweatStack, userId: string) => {
-    const { access_token: userToken } = (await (await mint(fake, userId)).json()) as { access_token: string };
-    const form = new FormData();
-    form.append("files", new File([new Uint8Array([0])], "a.fit"));
-    return fake.fetch(
-      new Request(`${fake.url}/api/v1/activities/upload`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${userToken}` },
-        body: form,
-      }),
-    );
-  };
-
   it("refuses a relay without activities:write, and a change of the app's scopes reaches a user at the next token", async () => {
     const fake = new FakeSweatStack({ defaultScopes: [] });
     const early = fake.createUser({});
@@ -136,6 +139,37 @@ describe("the fake's scopes", () => {
     expect(fake.mintedScopes.at(-1)).toEqual(["activities:write", "activities:read"]);
     expect((await mint(fake, id, "sharing:write")).status).toBe(400);
     expect((await mint(fake, id, "offline_access")).status).toBe(400);
+  });
+});
+
+/** The platform on an upload, as SweatStack takes it from its release that separates writer and platform. */
+describe("the fake's upload", () => {
+  it("records the platform and echoes it, with the writer the token makes", async () => {
+    const fake = new FakeSweatStack();
+    const { id } = fake.createUser({});
+    const response = await relay(fake, id, { external_id: "1001", platform: "garmin_connect" });
+    expect(response.status).toBe(202);
+    const { sources } = (await response.json()) as { sources: Record<string, unknown>[] };
+    expect(sources[0]).toMatchObject({ writer: "application", application_id: fake.appId, platform: "garmin_connect" });
+    expect(fake.uploads[0]?.platform).toBe("garmin_connect");
+  });
+
+  it("refuses a platform that isn't a name, and stores nothing", async () => {
+    const fake = new FakeSweatStack();
+    const { id } = fake.createUser({});
+    expect((await relay(fake, id, { platform: "Garmin Connect" })).status).toBe(422);
+    expect(fake.uploads).toEqual([]);
+  });
+
+  it("ignores provider, which SweatStack no longer reads", async () => {
+    const fake = new FakeSweatStack();
+    const { id } = fake.createUser({});
+    const response = await relay(fake, id, { provider: "garmin_connect" });
+    expect(response.status).toBe(202);
+    const { sources } = (await response.json()) as { sources: Record<string, unknown>[] };
+    expect(sources[0]).toMatchObject({ platform: null });
+    expect(sources[0]).not.toHaveProperty("provider");
+    expect(fake.uploads[0]?.platform).toBeNull();
   });
 });
 
