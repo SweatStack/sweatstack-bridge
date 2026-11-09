@@ -3,6 +3,10 @@
 Versions follow [Semantic Versioning](https://semver.org). `npm run update` moves a deployment between
 them.
 
+## Unreleased
+
+- **Uploads name the platform as `platform`**, which SweatStack reads from its release that separates who wrote a record from where its data came from. **Update on the day that release ships:** a bridge on 0.1.0 relays files without their platform, and an athlete who moved their account to your app gets each earlier activity twice. Nothing to configure.
+
 ## 0.1.0
 
 - **Sign-in with Garmin:** an OpenID Provider with discovery, keys, registration, the authorization code flow and the connection call.

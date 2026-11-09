@@ -65,7 +65,7 @@ export function checks(name: string, target: () => Target): void {
       const form = new FormData();
       form.append("files", new File([new Uint8Array([0])], "fake-check.fit"));
       form.append("external_id", REFERENCE);
-      form.append("provider", PROVIDER);
+      form.append("platform", PROVIDER);
       return t.fetch(`${t.url}/api/v1/activities/upload`, { method: "POST", headers: bearer(token), body: form });
     };
 
@@ -212,10 +212,15 @@ export function checks(name: string, target: () => Target): void {
     it("takes a relayed file as a source, and the same id is the same source", async () => {
       const first = await upload(userToken);
       await expectStatus(first, 202);
-      const { sources } = (await first.json()) as { sources: { id: string; status: string }[] };
+      const { sources } = (await first.json()) as { sources: ({ id: string; status: string } & Record<string, unknown>)[] };
       expect(sources).toHaveLength(1);
       expect(sources[0]?.id).toEqual(expect.any(String));
       expect(["processing", "failed"]).toContain(sources[0]?.status);
+      // The platform is what attributes the file, counts it for the connection, and finds the file a moved
+      // account already holds. `provider` and `origin` are the names it had before.
+      expect(sources[0]).toMatchObject({ writer: "application", application_id: t.appId, platform: PROVIDER });
+      expect(sources[0]).not.toHaveProperty("provider");
+      expect(sources[0]).not.toHaveProperty("origin");
 
       const again = await upload(userToken);
       const repeated = (await again.json()) as { sources: { id: string }[] };
