@@ -3,7 +3,7 @@
 // keep the output private. `--origin https://...` overrides the address found through Cloudflare.
 import { unstable_readConfig } from "wrangler";
 import { CloudflareProblem, findOrigin } from "./lib/cloudflare.mjs";
-import { urlsToPaste } from "./lib/urls.mjs";
+import { offersWellness, urlsToPaste } from "./lib/urls.mjs";
 import { wrangler } from "./lib/wrangler.mjs";
 
 async function webhookSecret() {
@@ -34,7 +34,8 @@ const origin = await findOrigin(config).catch((error) => {
 });
 
 console.log(`Your bridge: ${origin}\nThese URLs hold a secret. Keep them private, and don't paste this output anywhere else.`);
-for (const { where, urls } of urlsToPaste(origin, await webhookSecret())) {
+const offers = { wellness: offersWellness(config.vars?.GARMIN_APP_OFFERS) };
+for (const { where, urls } of urlsToPaste(origin, await webhookSecret(), offers)) {
   console.log(`\n${where}`);
   for (const entry of urls) {
     console.log(`\n  ${entry.setting}\n  ${entry.url}`);

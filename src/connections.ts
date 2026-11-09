@@ -49,6 +49,7 @@ export async function declare(services: ConnectionServices, connection: Connecti
     permissions: permissionsOf(connection),
     needsReconnect: connection.needs_reconnect !== 0,
     backfillDone: connection.backfill_done_at !== null,
+    wellnessHistoryDone: connection.wellness_history_done_at !== null,
   });
 
   // Only while the user is unknown.

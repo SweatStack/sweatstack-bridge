@@ -12,19 +12,25 @@ things that share only a user id:
   ID token. SweatStack makes or finds the user; the bridge never creates one.
 - **A client of SweatStack's public API.** The platform pings the bridge when a file is ready. The bridge
   acknowledges at once, queues the work in D1, downloads the file and uploads it to SweatStack, naming the
-  platform and deduplicated on the platform's activity id. A cron trigger every minute handles retries.
+  platform and deduplicated on the platform's activity id. Daily values arrive in the platform's push itself:
+  the bridge keeps those values, and nothing else from the push, until it has written them as the athlete. A
+  cron trigger every minute handles retries.
 
 ### The job queue
 
 Everything that can fail is a job in the `inbox` table, so it all gets the same retries: backing off to an
-hour, and ending after three days. A job reads the connection when it runs, so the order doesn't matter.
+hour, and ending after three days. A job reads the connection when it runs, so the order doesn't matter,
+with one exception: a connection's `wellness` jobs run in the order they arrived, because each value replaces
+the day's, and an older one retried after a newer one would put the older value back.
 
 | Kind | Added by | What it does |
 |---|---|---|
 | `activity_file` | The platform's ping | Downloads a file and uploads it as the athlete |
+| `wellness` | The platform's push of health summaries | Writes the daily values it carries as the athlete, one at a time. The values are its payload, and go with it when it finishes or gives up. A value SweatStack refuses is skipped |
 | `declare` | Anything that changes a connection | Tells SweatStack what it provides now, or that it's gone |
 | `permissions_change` | The platform's webhook, or a consent where it wouldn't say yet | Asks the platform, stores the answer, declares, and adds `backfill` if newly allowed. The webhook's own list is never believed |
 | `backfill` | A consent or a permission change | Asks for one 30-day window of history, keeps its place on the row, and goes back in line for the next |
+| `wellness_history` | A consent or a permission change | Asks once for the last 28 days of each health summary type, which the platform sends as pushes |
 | `deregistration` | The platform's webhook | Deletes the connection and its jobs, and adds a `declare`. With no connection (the echo of a disconnect) it does nothing. A message older than the latest consent is ignored |
 | `refresh_grant` | The cron, 30 days before a refresh token ends | Refreshes it, so a quiet athlete's grant doesn't lapse. Access tokens are refreshed only when a call needs one |
 | `expire_unclaimed` | The cron, a day after a consent with no user | Asks SweatStack once more, deregisters at the platform, deletes, and adds a `declare` |
@@ -112,7 +118,9 @@ Check every change against these.
 2. **Every step can run twice.** Jobs may repeat, overlap or arrive out of order. They read current state
    when they run, and the two outside systems dedupe.
 3. **Each fact has one owner.** SweatStack decides who a person is. The platform decides what was granted.
-   D1 holds only what's needed to act, and anything that can be derived or fetched isn't stored.
+   D1 holds only what's needed to act, and anything that can be derived or fetched isn't stored. Daily values
+   are the one kind of athlete data in it, because the platform sends nothing to fetch them by, and only until
+   they're written.
 4. **No setting for what can be derived.** Each setting is a step in the README and a way to get it wrong.
 5. **Bounded everything.** Every outbound call has a timeout, every run has a budget, every retry has an
    end, and every table has a purge.

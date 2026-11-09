@@ -10,15 +10,19 @@ export const STATUS_QUERIES = {
   failures:
     "SELECT kind, last_error AS reason, COUNT(*) AS count, MAX(done_at) AS latest FROM inbox WHERE done_at IS NOT NULL AND last_error IS NOT NULL GROUP BY kind, last_error ORDER BY latest DESC",
   lastFile: "SELECT MAX(received_at) AS at FROM inbox WHERE kind = 'activity_file'",
+  lastWellness: "SELECT MAX(received_at) AS at FROM inbox WHERE kind = 'wellness'",
   signingKey: "SELECT COUNT(*) AS count FROM meta WHERE key = 'signing_key'",
 };
 
 const TICK_ACTIVITIES = "Tick write for Activities under Data your app uses, on your app's Consent screen tab in SweatStack.";
+const TICK_WELLNESS = "Tick write for Wellness under Data your app uses, on your app's Consent screen tab in SweatStack.";
 
 /** Failures with one known fix. Retrying can't help with any of them: they need the owner. */
 const FIXES = {
   "activity_file:sweatstack_400": TICK_ACTIVITIES,
   "activity_file:sweatstack_403": TICK_ACTIVITIES,
+  "wellness:sweatstack_400": TICK_WELLNESS,
+  "wellness:sweatstack_403": TICK_WELLNESS,
   "declare:sweatstack_403": "Check that the token is your app's, and that Garmin is set to Self-hosted on your app's Data sources tab in SweatStack.",
   "declare:sweatstack_409": "Set Garmin to Self-hosted, with your issuer URL, on your app's Data sources tab in SweatStack.",
 };
@@ -74,8 +78,8 @@ function sweatstackLines({ sweatstackUrl, sweatstackKeys }) {
     : [`SweatStack:  ${sweatstackUrl} doesn't answer with SweatStack's keys. Check SWEATSTACK_URL in wrangler.jsonc: registration can't work without them`];
 }
 
-function databaseLines(database) {
-  const { connections, waiting, failures, lastFile, signingKey } = database;
+function databaseLines(database, { wellnessOffered }) {
+  const { connections, waiting, failures, lastFile, lastWellness, signingKey } = database;
   const lines = [];
 
   if (signingKey[0].count === 0) lines.push("Signing key: missing. npm run deploy makes it");
@@ -86,6 +90,11 @@ function databaseLines(database) {
   }
 
   lines.push(`Last file:   ${lastFile[0].at === null ? "none on record. If you expect some, see RUNBOOK.md: Set up Garmin's notifications" : when(lastFile[0].at)}`);
+  if (wellnessOffered) {
+    // A health row left disabled in Garmin's tool, or set to ping, looks just like athletes who didn't sync.
+    const last = lastWellness[0].at;
+    lines.push(`Last wellness: ${last === null ? "none on record. If you expect some, see RUNBOOK.md: Wellness" : when(last)}`);
+  }
 
   const queued = waiting.reduce((sum, { count }) => sum + count, 0);
   lines.push(`Jobs:        ${queued === 0 ? "nothing waiting" : `${queued} waiting`}`);
@@ -110,6 +119,6 @@ export function statusReport(facts) {
     ...bridgeLines(facts),
     ...settingsLines(facts.settings),
     ...sweatstackLines(facts),
-    ...(facts.database === null ? [`Database:    ${facts.databaseProblem}`] : databaseLines(facts.database)),
+    ...(facts.database === null ? [`Database:    ${facts.databaseProblem}`] : databaseLines(facts.database, facts)),
   ].join("\n");
 }

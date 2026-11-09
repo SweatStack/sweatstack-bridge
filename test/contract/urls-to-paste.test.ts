@@ -3,9 +3,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { urlsToPaste } from "../../scripts/lib/urls.mjs";
 import { ISSUER, ORIGIN, pathOf, resetDatabase, world } from "../support/world";
 
-async function pasted() {
+async function pasted(offers?: { wellness: boolean }) {
   const secret = await env.DB.prepare("SELECT value FROM meta WHERE key = 'webhook_secret'").first<string>("value");
-  const urls = urlsToPaste(ORIGIN, secret).flatMap((place) => place.urls);
+  const urls = urlsToPaste(ORIGIN, secret, offers).flatMap((place) => place.urls);
   const find = (setting: string) => urls.find((entry) => entry.setting === setting)?.url ?? "";
   return { urls, find };
 }
@@ -28,11 +28,14 @@ describe("the URLs an owner pastes", () => {
     expect(consent.searchParams.get("redirect_uri")).toBe(find("OAuth 2 redirect URL"));
   });
 
-  it("names webhooks the bridge takes, and an empty ping changes nothing", async () => {
-    const { urls } = await pasted();
+  it.each([
+    ["an app without wellness", false, 3],
+    ["an app with wellness", true, 7],
+  ])("names webhooks the bridge takes, for %s, and an empty ping changes nothing", async (_name, wellness, expected) => {
+    const { urls } = await pasted({ wellness });
     const webhooks = urls.filter((entry) => entry.check === "webhook");
-    expect(webhooks).toHaveLength(3);
-    const w = world();
+    expect(webhooks).toHaveLength(expected);
+    const w = world({ settings: { GARMIN_APP_OFFERS: wellness ? "activities,activity_history,wellness" : "activities,activity_history" } });
     for (const { url } of webhooks) {
       const response = await w.request(pathOf(url), { method: "POST", body: "{}" });
       expect(response.status, url).toBe(200);

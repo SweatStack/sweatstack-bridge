@@ -1,6 +1,7 @@
 import { errorRedirect, type PlatformContext } from "../context";
 import { deriveSubject, hashSecret, randomToken } from "../crypto";
 import { log } from "../log";
+import { historyToAsk } from "../inbox/lifecycle";
 import { PlatformError } from "../providers/types";
 import { declareAfterConsent } from "./finish";
 
@@ -32,7 +33,7 @@ export async function platformCallback(c: PlatformContext): Promise<Response> {
     const subjectKey = await db.meta("subject_key");
     if (subjectKey === null) throw new Error("The database has no subject key");
     const sub = await deriveSubject(subjectKey, provider.name, platformUserId);
-    const followUps = permissions === null ? (["permissions_change"] as const) : provider.mayBackfill(permissions) ? (["backfill"] as const) : [];
+    const followUps = permissions === null ? (["permissions_change"] as const) : historyToAsk(provider, permissions);
     await db.saveConsent({ sub, provider: provider.name, ...tokens, permissions, consentedAt: deps.now() }, [...followUps]);
     await declareAfterConsent({ config, db, deps, provider }, sub, { state: flow.rp_state, platformUserId });
     await db.issueCode(flow.id, await hashSecret(issued), sub, deps.now() + CODE_LIFETIME_SECONDS);

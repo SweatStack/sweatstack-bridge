@@ -4,9 +4,9 @@ import { Database, type ConnectionRow, type JobRow } from "../db";
 import type { Deps } from "../deps";
 import { log } from "../log";
 import { findProvider } from "../providers";
-import { PlatformError } from "../providers/types";
-import { deleteConnection, SweatStackError, uploadActivityFile } from "../sweatstack";
-import { backfillJob, deregistrationJob, expireUnclaimedJob, permissionsJob, refreshGrantJob } from "./lifecycle";
+import { PlatformError, type DailyValue } from "../providers/types";
+import { deleteConnection, SweatStackError, uploadActivityFile, writeDaily } from "../sweatstack";
+import { backfillJob, deregistrationJob, expireUnclaimedJob, permissionsJob, refreshGrantJob, wellnessHistoryJob } from "./lifecycle";
 import { claimNext, settle, type JobResult } from "./queue";
 
 /** Generous for a small app, and it leaves room for the next minute's run. */
@@ -46,12 +46,16 @@ async function runJob(deps: Deps, db: Database, job: JobRow): Promise<JobResult>
     switch (job.kind) {
       case "activity_file":
         return connection === null ? { outcome: "done" } : await relayFile(services, connection, job);
+      case "wellness":
+        return connection === null ? { outcome: "done" } : await relayWellness(services, connection, job);
       case "declare":
         return await declareJob(services, connection, job);
       case "permissions_change":
         return connection === null ? { outcome: "done" } : await permissionsJob(services, connection, job);
       case "backfill":
         return connection === null ? { outcome: "done" } : await backfillJob(services, connection, job);
+      case "wellness_history":
+        return connection === null ? { outcome: "done" } : await wellnessHistoryJob(services, connection, job);
       case "deregistration":
         return connection === null ? { outcome: "done" } : await deregistrationJob(services, connection, job);
       case "refresh_grant":
@@ -86,6 +90,31 @@ async function relayFile(services: ConnectionServices, connection: ConnectionRow
     file,
   });
   return outcome.accepted ? { outcome: "done" } : { outcome: "give_up", reason: "file_refused_by_sweatstack" };
+}
+
+/**
+ * Writes the values a push brought, each replacing what its day held. A value SweatStack refuses, as one
+ * outside its range, is skipped: the others still count. A retry writes them all again, which is safe.
+ * The log says how many, never what.
+ */
+async function relayWellness(services: ConnectionServices, connection: ConnectionRow, job: JobRow): Promise<JobResult> {
+  const { provider } = services;
+  if (connection.user_id === null) return { outcome: "retry", reason: "waiting_for_user" };
+  if (job.payload === null) return { outcome: "give_up", reason: "invalid_job" };
+  if (!provider.mayRelayWellness(permissionsOf(connection))) return { outcome: "done" };
+
+  let written = 0;
+  let refused = 0;
+  for (const daily of JSON.parse(job.payload) as DailyValue[]) {
+    const { accepted } = await writeDaily(services, { ...daily, userId: connection.user_id, platform: provider.name });
+    if (accepted) written += 1;
+    else {
+      refused += 1;
+      log("daily_refused", { provider: provider.name, measure: daily.measure });
+    }
+  }
+  log("wellness_relayed", { provider: provider.name, written, refused });
+  return { outcome: "done" };
 }
 
 /**

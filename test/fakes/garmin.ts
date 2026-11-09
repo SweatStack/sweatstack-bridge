@@ -34,6 +34,9 @@ const REFRESH_LIFETIME_SECONDS = 90 * 24 * 60 * 60;
 /** Garmin allows up to about 100 days per backfill request. */
 const LONGEST_BACKFILL_SECONDS = 100 * 24 * 60 * 60;
 
+/** Garmin's health history reaches back about a month: a longer window is refused. */
+const HEALTH_BACKFILL_SECONDS = 31 * 24 * 60 * 60;
+
 export const GARMIN_HOSTS = ["connect.garmin.com", "diauth.garmin.com", "apis.garmin.com"] as const;
 
 export class FakeGarmin {
@@ -47,8 +50,13 @@ export class FakeGarmin {
     permissions: [] as number[],
     file: [] as number[],
     backfill: [] as number[],
+    healthBackfill: [] as number[],
     registration: [] as number[],
   };
+  /** Every health history request Garmin answered with a yes, by summary type. */
+  readonly healthBackfills: { type: string; userId: string; start: number; end: number }[] = [];
+  /** Every health history request that reached Garmin, whatever the answer. */
+  readonly healthBackfillRequests: { type: string; start: number; end: number }[] = [];
   /** Every refresh request that reached Garmin. */
   readonly refreshes: string[] = [];
   readonly downloads: string[] = [];
@@ -229,6 +237,26 @@ export class FakeGarmin {
       this.backfills.push({ userId: account.userId, start, end });
       return c.body(null, 202);
     });
+
+    // Health history goes back about a month at most, and comes back as pushes.
+    for (const type of ["dailies", "sleeps", "bodyComps", "hrv"]) {
+      this.app.get(`/wellness-api/rest/backfill/${type}`, (c) => {
+        const start = Number(c.req.query("summaryStartTimeInSeconds"));
+        const end = Number(c.req.query("summaryEndTimeInSeconds"));
+        this.healthBackfillRequests.push({ type, start, end });
+        const failure = this.failures.healthBackfill.shift();
+        if (failure !== undefined) return c.body(null, failure as 500);
+        const account = this.bearer(c.req.header("Authorization"));
+        if (!account) return c.body(null, 401);
+        if (!account.permissions.includes("HISTORICAL_DATA_EXPORT")) return c.text("Access denied, required HISTORICAL_DATA_EXPORT", 412);
+        if (!Number.isInteger(start) || !Number.isInteger(end) || start > end || end - start > HEALTH_BACKFILL_SECONDS) return c.body(null, 400);
+        if (this.healthBackfills.some((window) => window.type === type && window.userId === account.userId && window.start === start && window.end === end)) {
+          return c.body(null, 409);
+        }
+        this.healthBackfills.push({ type, userId: account.userId, start, end });
+        return c.body(null, 202);
+      });
+    }
   }
 
   private registrationRoute(): void {

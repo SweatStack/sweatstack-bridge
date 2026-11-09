@@ -9,6 +9,7 @@ wearable platform steps here are Garmin's. [DEVELOPING.md](DEVELOPING.md) explai
 - [Run it](#run-it): check on it, update it
 - [Back up and restore](#back-up-and-restore)
 - [Set up Garmin's notifications](#set-up-garmins-notifications)
+- [Wellness](#wellness): dailies from Garmin
 - [Fix a missing Disconnect button](#fix-a-missing-disconnect-button)
 - [Try a sign-in again](#try-a-sign-in-again)
 
@@ -63,7 +64,7 @@ Change these in `wrangler.jsonc` in your copy, not in the Cloudflare dashboard, 
 |---|---|
 | `SWEATSTACK_URL` | Where SweatStack runs. Leave as is |
 | `BACKFILL_DAYS` | Days of history to request on connecting. Default 90 |
-| `GARMIN_APP_OFFERS` | What your Garmin app is approved for: `activities`, `activity_history`, `wellness`, `workouts`. Athletes are only asked to reconnect for what your app can actually request |
+| `GARMIN_APP_OFFERS` | What your Garmin app is approved for: `activities`, `activity_history`, `wellness`, `workouts`. Athletes are only asked to reconnect for what your app can actually request. Garmin's Starter Access has no history: leave `activity_history` out. For `wellness`, see [Wellness](#wellness) |
 
 ## Run it
 
@@ -162,16 +163,17 @@ key and secret. Enable these three settings, with the URLs from the command:
 - Common: User Permissions Change
 - Common: Deregistrations
 
-Leave every other setting disabled. Garmin allows one URL per setting, so any other server you had on these
-settings stops receiving them.
+Leave every other setting disabled, apart from the health ones under [Wellness](#wellness) if your app offers it.
+Garmin allows one URL per setting, so any other server you had on these settings stops receiving them.
 
 ### What goes wrong without each one
 
 | Missing | What you see |
 |---|---|
-| Activity Files | New activities and history never arrive, because Garmin delivers both as these pings. A sign-in still works |
+| Activity Files | New activities and history never arrive, because Garmin announces both through this setting. A sign-in still works |
 | User Permissions Change | When an athlete changes what they share, the status and the Portal stay out of date, and history doesn't start when they allow it later |
 | Deregistrations | When an athlete removes your app in Garmin Connect, the connection stays. It only shows as needing a reconnect once the bridge next fails to use its token |
+| A health setting, or one set to ping | No dailies of that kind arrive. `npm run status` says "Last wellness: none on record" while none have |
 
 The bridge can't know about anything that happened before the URL was set. To correct a connection from that
 time, have the athlete sign in again.
@@ -183,10 +185,29 @@ time, have the athlete sign in again.
 | Sync an activity | A finished `activity_file` row with no `last_error` |
 | Change what you share with the app | A finished `permissions_change` row |
 | Remove the app from your connected apps | The connection is gone, and a finished `declare` row is left |
+| Sync a watch or a scale, with wellness on offer | A finished `wellness` row with no `last_error` |
 
 ```sh
 npx wrangler d1 execute sweatstack-bridge --remote --command "SELECT kind, attempts, last_error, done_at FROM inbox ORDER BY id DESC LIMIT 5"
 ```
+
+## Wellness
+
+The bridge can relay an athlete's resting heart rate, sleep duration, HRV, body mass and body fat to SweatStack as
+dailies, the same values SweatStack's own Garmin connection fills. It needs your Garmin app to have the Health API.
+
+1. Add `wellness` to `GARMIN_APP_OFFERS` in `wrangler.jsonc`, then commit and push.
+2. On your app's Consent screen tab in SweatStack, tick write for Wellness under Data your app uses.
+3. Run `npm run urls`. In Garmin's endpoint configuration, enable the four health settings it prints, each
+   **as push**, with its URL. Leave every other health setting disabled.
+
+Athletes are asked to share their health data on Garmin's consent screen, and athletes connected before are asked
+to reconnect if they didn't. With `activity_history` on offer too, the bridge asks Garmin for each athlete's last
+28 days when they connect.
+
+A value replaces whatever SweatStack held for that day, including one the athlete entered. A value waits in the
+bridge's database until it's delivered, for at most 3 days, and is deleted then. The rest of what Garmin sends
+is never stored.
 
 ## Fix a missing Disconnect button
 

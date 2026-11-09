@@ -1,5 +1,7 @@
 import type { Deps } from "../deps";
 import { outbound } from "../http";
+import { log } from "../log";
+import { WELLNESS_SUMMARY_TYPES, wellnessValues } from "./garmin-wellness";
 import {
   PlatformError,
   type Capability,
@@ -10,6 +12,7 @@ import {
   type PlatformTokens,
   type Provider,
   type WebhookEvent,
+  type WellnessHistoryAsked,
 } from "./types";
 
 const AUTHORIZE_URL = "https://connect.garmin.com/oauth2Confirm";
@@ -18,6 +21,7 @@ const USER_ID_URL = "https://apis.garmin.com/partner-gateway/rest/user/id";
 const PERMISSIONS_URL = "https://apis.garmin.com/partner-gateway/rest/user/permissions";
 const REGISTRATION_URL = "https://apis.garmin.com/partner-gateway/rest/user/registration";
 const BACKFILL_URL = "https://apis.garmin.com/wellness-api/rest/backfill/activities";
+const HEALTH_BACKFILL_URL = "https://apis.garmin.com/wellness-api/rest/backfill";
 
 /** The only host a bearer token is ever sent to. */
 const API_HOST = "apis.garmin.com";
@@ -31,7 +35,7 @@ const PERMISSIONS: Readonly<Record<Capability, string>> = {
 };
 
 /** What this version of the bridge relays, whatever the app is approved for. */
-const CARRIED: readonly Capability[] = ["activities", "activity_history"];
+const CARRIED: readonly Capability[] = ["activities", "activity_history", "wellness"];
 
 const OFFERS_SETTING = "GARMIN_APP_OFFERS";
 const DEFAULT_OFFERS: readonly Capability[] = ["activities", "activity_history"];
@@ -40,8 +44,19 @@ const ACTIVITY_FILES_WEBHOOK = "activity-files";
 const PERMISSIONS_WEBHOOK = "user-permissions";
 const DEREGISTRATIONS_WEBHOOK = "deregistrations";
 
+/** The path the owner pastes for each health summary type, and the key of its list in a push. */
+const WELLNESS_WEBHOOKS: Readonly<Record<string, string>> = {
+  dailies: "dailies",
+  sleeps: "sleeps",
+  "body-compositions": "bodyComps",
+  hrv: "hrv",
+};
+
 const DAY_SECONDS = 24 * 60 * 60;
 const HISTORY_WINDOW_SECONDS = 30 * DAY_SECONDS;
+
+/** Garmin keeps health history for about a month, and refuses to go back further. */
+const WELLNESS_HISTORY_SECONDS = 28 * DAY_SECONDS;
 
 const REQUEST_TIMEOUT_MS = 8_000;
 const DOWNLOAD_TIMEOUT_MS = 30_000;
@@ -105,7 +120,8 @@ export function garmin(deps: Pick<Deps, "env" | "fetch" | "now">): Provider {
     name: GARMIN_NAME,
     label: "Garmin Connect",
     requiredSettings: ["GARMIN_CLIENT_ID", "GARMIN_CLIENT_SECRET"],
-    webhookKinds: [ACTIVITY_FILES_WEBHOOK, PERMISSIONS_WEBHOOK, DEREGISTRATIONS_WEBHOOK],
+    webhookKinds: [ACTIVITY_FILES_WEBHOOK, PERMISSIONS_WEBHOOK, DEREGISTRATIONS_WEBHOOK, ...Object.keys(WELLNESS_WEBHOOKS)],
+    carriedCapabilities: CARRIED,
 
     settingProblems() {
       return offerNames()
@@ -163,16 +179,17 @@ export function garmin(deps: Pick<Deps, "env" | "fetch" | "now">): Provider {
       return Array.isArray(body?.permissions) ? body.permissions.map(String) : null;
     },
 
-    capabilityMap({ permissions, needsReconnect, backfillDone }: ConnectionState): CapabilityMap {
+    capabilityMap({ permissions, needsReconnect, backfillDone, wellnessHistoryDone }: ConnectionState): CapabilityMap {
       const offers = offered();
-      // Without history on offer no backfill ever runs, so there's nothing to wait for.
-      const settled = backfillDone || !offers.has("activity_history");
+      // Without history on offer no history is ever asked for, so there's nothing to wait for.
+      const settled = (capability: Capability) =>
+        !offers.has("activity_history") || (capability === "wellness" ? wellnessHistoryDone : backfillDone);
       const status = (capability: Capability) => {
         // Reconnecting can't change what the app itself isn't approved for, so nobody gets asked to.
         if (!CARRIED.includes(capability) || !offers.has(capability)) return "unavailable";
         if (needsReconnect) return "action_required";
         if (permissions !== null && !permissions.includes(PERMISSIONS[capability])) return "action_required";
-        return settled ? "ready" : "syncing";
+        return settled(capability) ? "ready" : "syncing";
       };
       return {
         activities: status("activities"),
@@ -223,7 +240,40 @@ export function garmin(deps: Pick<Deps, "env" | "fetch" | "now">): Provider {
       return { cursor: JSON.stringify(next) };
     },
 
+    mayRelayWellness(permissions) {
+      return offered().has("wellness") && (permissions === null || permissions.includes(PERMISSIONS.wellness));
+    },
+
+    mayRequestWellnessHistory(permissions) {
+      const offers = offered();
+      return (
+        offers.has("wellness") &&
+        offers.has("activity_history") &&
+        permissions !== null &&
+        permissions.includes(PERMISSIONS.wellness) &&
+        permissions.includes(PERMISSIONS.activity_history)
+      );
+    },
+
+    async requestWellnessHistory(accessToken): Promise<WellnessHistoryAsked | null> {
+      const end = deps.now();
+      const query = new URLSearchParams({ summaryStartTimeInSeconds: String(end - WELLNESS_HISTORY_SECONDS), summaryEndTimeInSeconds: String(end) });
+      let anyAccepted = false;
+      for (const type of WELLNESS_SUMMARY_TYPES) {
+        const { status, ok } = await bearerGet(`${HEALTH_BACKFILL_URL}/${type}?${query}`, accessToken);
+        // Right after a consent, Garmin needs a moment.
+        if (status === 403) return null;
+        const refusedThisType = status >= 400 && status < 500 && status !== 401 && status !== 429;
+        if (!ok && !refusedThisType) throw new PlatformError(status);
+        // A 409 is a repeat, so Garmin has it. Any other refusal is about this type alone.
+        anyAccepted ||= ok || status === 409;
+      }
+      return { anyAccepted };
+    },
+
     parseWebhook(kind, body): WebhookEvent[] {
+      const summaryType = Object.hasOwn(WELLNESS_WEBHOOKS, kind) ? WELLNESS_WEBHOOKS[kind] : undefined;
+      if (summaryType !== undefined) return wellnessEvents(kind, summaryType, body, offered().has("wellness"));
       if (kind === PERMISSIONS_WEBHOOK) return accountsIn(body, "userPermissionsChange").map((platformUserId) => ({ type: "permissions_changed", platformUserId }));
       if (kind === DEREGISTRATIONS_WEBHOOK) return accountsIn(body, "deregistrations").map((platformUserId) => ({ type: "deregistered", platformUserId }));
       if (kind !== ACTIVITY_FILES_WEBHOOK) return [];
@@ -267,6 +317,20 @@ export function garmin(deps: Pick<Deps, "env" | "fetch" | "now">): Provider {
       return { bytes: await response.arrayBuffer(), filename: `${activityId}.fit` };
     },
   };
+}
+
+/**
+ * The values in a push, one event per account. Nothing at all when the app doesn't offer wellness, so values
+ * nobody will relay are never stored. A ping holds a link to the values instead of the values themselves,
+ * which the bridge doesn't follow: every Garmin app can send pushes, and only pushes are relayed.
+ */
+function wellnessEvents(kind: string, summaryType: string, body: unknown, offered: boolean): WebhookEvent[] {
+  const list = (body as Record<string, unknown> | null)?.[summaryType];
+  if (!offered || !Array.isArray(list)) return [];
+  if (list.some((record) => typeof (record as { callbackURL?: unknown } | null)?.callbackURL === "string")) {
+    log("wellness_ping_refused", { kind });
+  }
+  return [...wellnessValues(summaryType, list)].map(([platformUserId, values]) => ({ type: "wellness" as const, platformUserId, values }));
 }
 
 /** The accounts a notification is about. The rest of it, such as a list of permissions, isn't believed. */

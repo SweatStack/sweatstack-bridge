@@ -15,6 +15,12 @@ export interface ConnectionState {
   permissions: readonly string[] | null;
   needsReconnect: boolean;
   backfillDone: boolean;
+  wellnessHistoryDone: boolean;
+}
+
+/** What asking for wellness history came to. */
+export interface WellnessHistoryAsked {
+  anyAccepted: boolean;
 }
 
 /** One file a platform says is ready. */
@@ -27,9 +33,19 @@ export interface FileReady {
   reference: unknown;
 }
 
+/** One value for one day, in SweatStack's words: a measure it knows, a calendar date, its canonical unit. */
+export interface DailyValue {
+  measure: string;
+  /** `YYYY-MM-DD`. */
+  date: string;
+  value: number;
+}
+
 /** What a platform's webhook says happened. Nothing else in the body is believed. */
 export type WebhookEvent =
   | FileReady
+  /** Daily values the platform sent in the webhook itself. They are kept only until they're written. */
+  | { type: "wellness"; platformUserId: string; values: DailyValue[] }
   | { type: "permissions_changed"; platformUserId: string }
   | { type: "deregistered"; platformUserId: string };
 
@@ -76,6 +92,11 @@ export interface Provider {
   settingProblems(): string[];
   /** What the owner says their app on this platform is approved for. */
   offeredCapabilities(): ReadonlySet<Capability>;
+  /**
+   * What this version of the bridge relays for this platform. With the offer, it decides what the
+   * capability map can say, so a new version that carries more has to tell SweatStack again.
+   */
+  readonly carriedCapabilities: readonly Capability[];
 
   /** Where to send the browser for the platform's consent. */
   authorizeUrl(params: { redirectUri: string; state: string; codeChallenge: string }): string;
@@ -103,6 +124,16 @@ export interface Provider {
   readonly webhookKinds: readonly string[];
   parseWebhook(kind: string, body: unknown): WebhookEvent[];
   mayRelayFiles(permissions: readonly string[] | null): boolean;
+  /** Whether this account's daily values are relayed. Unknown permissions count as allowed, as for files. */
+  mayRelayWellness(permissions: readonly string[] | null): boolean;
+  /** Whether this app may ask for this account's wellness history. Unknown permissions don't count as allowed. */
+  mayRequestWellnessHistory(permissions: readonly string[] | null): boolean;
+  /**
+   * Asks once for the recent wellness history the platform keeps, which it delivers through its webhook.
+   *
+   * @returns null when the platform isn't ready for this account yet.
+   */
+  requestWellnessHistory(accessToken: string): Promise<WellnessHistoryAsked | null>;
   /** Whether a bearer token may be sent to this file's address. A forged ping must never get one. */
   isDownloadAllowed(reference: unknown): boolean;
   downloadFile(accessToken: string, reference: unknown): Promise<DownloadedFile>;

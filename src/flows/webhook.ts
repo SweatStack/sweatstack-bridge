@@ -29,6 +29,8 @@ export async function webhook(c: PlatformContext): Promise<Response> {
       switch (event.type) {
         case "file":
           return { ...about, kind: "activity_file", externalId: event.externalId, payload: JSON.stringify(event.reference) };
+        case "wellness":
+          return { ...about, kind: "wellness", payload: JSON.stringify(event.values) };
         case "permissions_changed":
           return { ...about, kind: "permissions_change" };
         case "deregistered":

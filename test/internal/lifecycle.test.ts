@@ -565,3 +565,87 @@ describe("D1 refusing writes", () => {
     expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM inbox").first("count")).toBe(0);
   });
 });
+
+describe("wellness", () => {
+  const WELLNESS = {
+    settings: { GARMIN_APP_OFFERS: "activities,activity_history,wellness" },
+    sweatstack: { defaultScopes: ["activities:write", "wellness:write"] },
+  };
+  const ines = { userId: "garmin-ines", permissions: [...ALL_PERMISSIONS, "HEALTH_EXPORT"] };
+  const push = async (account: { userId: string }, value: number) => {
+    await w.webhook("dailies", { dailies: [{ userId: account.userId, calendarDate: "2026-11-08", restingHeartRateInBeatsPerMinute: value }] });
+    await w.settled();
+  };
+
+  beforeEach(() => setUp(WELLNESS));
+
+  it("keeps the values only until they're written", async () => {
+    const { sub } = await signedIn(ines);
+    await push(ines, 52);
+    expect(await jobs(sub)).toContainEqual(expect.objectContaining({ kind: "wellness", payload: null, last_error: null, done_at: expect.any(Number) }));
+  });
+
+  it("drops the values when it gives up", async () => {
+    w.sweatstack.defaultScopes = ["activities:write"];
+    const { sub } = await signedIn(ines);
+    await push(ines, 52);
+    expect(await jobs(sub)).toContainEqual(expect.objectContaining({ kind: "wellness", payload: null, last_error: "sweatstack_400" }));
+  });
+
+  it("stores nothing when the app doesn't offer wellness", async () => {
+    await setUp({ ...WELLNESS, settings: { GARMIN_APP_OFFERS: "activities,activity_history" } });
+    await signedIn(ines);
+    await push(ines, 52);
+    const { count } = (await env.DB.prepare("SELECT COUNT(*) AS count FROM inbox WHERE kind = 'wellness'").first<{ count: number }>())!;
+    expect(count).toBe(0);
+  });
+
+  it("stores nothing for an account it doesn't hold", async () => {
+    await push({ userId: "garmin-stranger" }, 52);
+    const { count } = (await env.DB.prepare("SELECT COUNT(*) AS count FROM inbox WHERE kind = 'wellness'").first<{ count: number }>())!;
+    expect(count).toBe(0);
+  });
+
+  it("holds a connection's later wellness while an earlier one waits to be tried again, and nobody else's", async () => {
+    const { sub } = await signedIn(ines);
+    const { sub: other } = await signedIn({ ...lars, permissions: ines.permissions });
+    await env.DB.prepare("DELETE FROM inbox").run();
+    const add = (subject: string, nextAttemptAt: number) =>
+      env.DB.prepare("INSERT INTO inbox (kind, provider, sub, payload, next_attempt_at, received_at) VALUES ('wellness', ?, ?, '[]', ?, 0)")
+        .bind(PROVIDER, subject, nextAttemptAt)
+        .run();
+    await add(sub, w.clock.now + 60);
+    await add(sub, w.clock.now);
+    await add(other, w.clock.now);
+    const claimed = await db.claimJob(w.clock.now, w.clock.now + 300, null);
+    expect(claimed?.sub).toBe(other);
+    expect(await db.claimJob(w.clock.now, w.clock.now + 300, null)).toBeNull();
+  });
+
+  it("tells SweatStack about wellness and asks for its history on updating, for an app that already offered it", async () => {
+    const { sub } = await signedIn(ines);
+    await w.cron();
+    // The database as an earlier version left it: the offer kept on its own, wellness neither declared nor asked for.
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM meta WHERE key LIKE 'declarable_capabilities:%'"),
+      env.DB.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, 'activities,activity_history,wellness')").bind(`offered_capabilities:${PROVIDER}`),
+      env.DB.prepare("UPDATE connections SET wellness_history_done_at = NULL"),
+    ]);
+    const asked = w.garmin.healthBackfills.length;
+    w.sweatstack.connectionCalls.length = 0;
+
+    w.clock.now += 60;
+    await w.cron();
+    expect(w.sweatstack.connectionCalls.filter((call) => call.subject === sub).at(-1)?.capabilities).toMatchObject({ wellness: "ready" });
+    expect(w.garmin.healthBackfillRequests.length).toBeGreaterThan(asked);
+  });
+
+  it("tells nobody again on the next run", async () => {
+    await signedIn(ines);
+    await w.cron();
+    w.sweatstack.connectionCalls.length = 0;
+    w.clock.now += 60;
+    await w.cron();
+    expect(w.sweatstack.connectionCalls).toEqual([]);
+  });
+});

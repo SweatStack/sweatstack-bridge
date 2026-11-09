@@ -34,17 +34,22 @@ async function enqueueWhatsDue(deps: Deps, db: Database): Promise<void> {
 }
 
 /**
- * When the owner changes what their platform app offers, what every connection provides changes too, and
- * SweatStack only learns that by being told again. History that's newly on offer also has to be asked for.
+ * What every connection provides changes when the owner changes what their platform app offers, and when a
+ * new version of the bridge carries more of it. SweatStack only learns that by being told again, and history
+ * that's newly on offer also has to be asked for.
+ *
+ * Under its own key: an earlier version kept the offer alone, under `offered_capabilities:`. A copy that
+ * already offered what this version newly carries would find that value unchanged and tell nobody, so every
+ * copy rechecks once on its first run of this version.
  */
 async function redeclareIfOffersChanged(deps: Deps, db: Database): Promise<void> {
   for (const provider of allProviders(deps)) {
     if (!readConfig(deps.env, provider).ok) continue;
-    const offered = [...provider.offeredCapabilities()].sort().join(",");
-    const key = `offered_capabilities:${provider.name}`;
-    const declared = await db.metaValue(key);
-    if (declared === offered) continue;
+    const declarable = [...provider.offeredCapabilities()].filter((capability) => provider.carriedCapabilities.includes(capability));
+    const value = declarable.sort().join(",");
+    const key = `declarable_capabilities:${provider.name}`;
+    if ((await db.metaValue(key)) === value) continue;
     await db.enqueueRecheckForAll(provider.name, deps.now());
-    await db.setMeta(key, offered);
+    await db.setMeta(key, value);
   }
 }

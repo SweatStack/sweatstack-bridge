@@ -200,7 +200,7 @@ describe("when something fails along the way", () => {
   });
 
   it("holds a token that can only do what the bridge does, whatever else the app ticked", async () => {
-    await setUp({ sweatstack: { defaultScopes: ["activities:write", "activities:read", "dailies:write", "offline_access"] } });
+    await setUp({ sweatstack: { defaultScopes: ["activities:write", "activities:read", "wellness:write", "offline_access"] } });
     await w.ping(w.garmin.fileReady(kari, "1001"));
     expect(w.sweatstack.mintedScopes).toEqual([["activities:write"]]);
     expect(w.sweatstack.uploads).toHaveLength(1);

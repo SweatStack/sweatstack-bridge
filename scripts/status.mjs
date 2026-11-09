@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { unstable_readConfig } from "wrangler";
 import { findOrigin } from "./lib/cloudflare.mjs";
 import { missingSettings, STATUS_QUERIES, statusReport } from "./lib/status.mjs";
+import { offersWellness } from "./lib/urls.mjs";
 import { latestTag } from "./lib/versions.mjs";
 import { wrangler } from "./lib/wrangler.mjs";
 
@@ -75,6 +76,7 @@ console.log(
     settings: missingSettings({ requiredSecrets: requiredSecrets(), secretNames: secretNames(), vars: config.vars }),
     sweatstackUrl,
     sweatstackKeys,
+    wellnessOffered: offersWellness(config.vars?.GARMIN_APP_OFFERS),
     ...readDatabase(),
   }),
 );

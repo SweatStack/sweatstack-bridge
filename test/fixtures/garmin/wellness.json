@@ -1,0 +1,379 @@
+[
+  {
+    "name": "a resting heart rate",
+    "summaryType": "dailies",
+    "summaries": [
+      {
+        "userId": "garmin-user-1",
+        "summaryId": "x-1",
+        "calendarDate": "2016-01-11",
+        "restingHeartRateInBeatsPerMinute": 64,
+        "averageHeartRateInBeatsPerMinute": 73
+      }
+    ],
+    "rows": [
+      {
+        "measure": "resting_hr",
+        "date": "2016-01-11",
+        "value": 64,
+        "platform": "garmin_connect"
+      }
+    ]
+  },
+  {
+    "name": "a resting heart rate of 0, as on a day the watch was barely worn, gives nothing",
+    "summaryType": "dailies",
+    "summaries": [
+      {
+        "userId": "garmin-user-1",
+        "summaryId": "x-2",
+        "calendarDate": "2016-01-11",
+        "restingHeartRateInBeatsPerMinute": 0
+      }
+    ],
+    "rows": []
+  },
+  {
+    "name": "no resting heart rate gives nothing, and the 7-day average is never used instead",
+    "summaryType": "dailies",
+    "summaries": [
+      {
+        "userId": "garmin-user-1",
+        "summaryId": "x-3",
+        "calendarDate": "2016-01-11",
+        "averageHeartRateInBeatsPerMinute": 73
+      }
+    ],
+    "rows": []
+  },
+  {
+    "name": "a resting heart rate outside SweatStack's range gives nothing",
+    "summaryType": "dailies",
+    "summaries": [
+      {
+        "userId": "garmin-user-1",
+        "summaryId": "x-4",
+        "calendarDate": "2016-01-11",
+        "restingHeartRateInBeatsPerMinute": 300
+      }
+    ],
+    "rows": []
+  },
+  {
+    "name": "a day sent twice in one push: the last one wins",
+    "summaryType": "dailies",
+    "summaries": [
+      {
+        "userId": "garmin-user-1",
+        "summaryId": "x-5",
+        "calendarDate": "2016-01-11",
+        "restingHeartRateInBeatsPerMinute": 60
+      },
+      {
+        "userId": "garmin-user-1",
+        "summaryId": "x-5",
+        "calendarDate": "2016-01-11",
+        "restingHeartRateInBeatsPerMinute": 58
+      }
+    ],
+    "rows": [
+      {
+        "measure": "resting_hr",
+        "date": "2016-01-11",
+        "value": 58,
+        "platform": "garmin_connect"
+      }
+    ]
+  },
+  {
+    "name": "a night's sleep",
+    "summaryType": "sleeps",
+    "summaries": [
+      {
+        "userId": "garmin-user-1",
+        "summaryId": "x-6",
+        "calendarDate": "2016-01-10",
+        "durationInSeconds": 15264,
+        "validation": "ENHANCED_FINAL"
+      }
+    ],
+    "rows": [
+      {
+        "measure": "sleep_duration",
+        "date": "2016-01-10",
+        "value": 15264,
+        "platform": "garmin_connect"
+      }
+    ]
+  },
+  {
+    "name": "a sleep recorded off the wrist gives nothing",
+    "summaryType": "sleeps",
+    "summaries": [
+      {
+        "userId": "garmin-user-1",
+        "summaryId": "x-7",
+        "calendarDate": "2021-01-29",
+        "durationInSeconds": 28260,
+        "validation": "OFF_WRIST"
+      }
+    ],
+    "rows": []
+  },
+  {
+    "name": "a sleep of 0 seconds gives nothing",
+    "summaryType": "sleeps",
+    "summaries": [
+      {
+        "userId": "garmin-user-1",
+        "summaryId": "x-8",
+        "calendarDate": "2016-01-10",
+        "durationInSeconds": 0
+      }
+    ],
+    "rows": []
+  },
+  {
+    "name": "a sleep without a calendar date gives nothing",
+    "summaryType": "sleeps",
+    "summaries": [
+      {
+        "userId": "garmin-user-1",
+        "summaryId": "x-9",
+        "durationInSeconds": 15264
+      }
+    ],
+    "rows": []
+  },
+  {
+    "name": "last night's HRV",
+    "summaryType": "hrv",
+    "summaries": [
+      {
+        "userId": "garmin-user-1",
+        "summaryId": "x-10",
+        "calendarDate": "2022-05-31",
+        "lastNightAvg": 44,
+        "lastNight5MinHigh": 72
+      }
+    ],
+    "rows": [
+      {
+        "measure": "hrv",
+        "date": "2022-05-31",
+        "value": 44,
+        "platform": "garmin_connect"
+      }
+    ]
+  },
+  {
+    "name": "an HRV summary without last night's average gives nothing",
+    "summaryType": "hrv",
+    "summaries": [
+      {
+        "userId": "garmin-user-1",
+        "summaryId": "x-11",
+        "calendarDate": "2022-05-31"
+      }
+    ],
+    "rows": []
+  },
+  {
+    "name": "a weigh-in with body fat",
+    "summaryType": "bodyComps",
+    "summaries": [
+      {
+        "userId": "garmin-user-1",
+        "summaryId": "x-12",
+        "measurementTimeInSeconds": 1439726400,
+        "measurementTimeOffsetInSeconds": 0,
+        "weightInGrams": 75450,
+        "bodyFatInPercent": 17.1
+      }
+    ],
+    "rows": [
+      {
+        "measure": "body_mass",
+        "date": "2015-08-16",
+        "value": 75.5,
+        "platform": "garmin_connect"
+      },
+      {
+        "measure": "body_fat_pct",
+        "date": "2015-08-16",
+        "value": 17.1,
+        "platform": "garmin_connect"
+      }
+    ]
+  },
+  {
+    "name": "a weigh-in without body fat",
+    "summaryType": "bodyComps",
+    "summaries": [
+      {
+        "userId": "garmin-user-1",
+        "summaryId": "x-13",
+        "measurementTimeInSeconds": 1704110400,
+        "weightInGrams": 80000
+      }
+    ],
+    "rows": [
+      {
+        "measure": "body_mass",
+        "date": "2024-01-01",
+        "value": 80,
+        "platform": "garmin_connect"
+      }
+    ]
+  },
+  {
+    "name": "body fat without a weight",
+    "summaryType": "bodyComps",
+    "summaries": [
+      {
+        "userId": "garmin-user-1",
+        "summaryId": "x-14",
+        "measurementTimeInSeconds": 1704110400,
+        "bodyFatInPercent": 20.0
+      }
+    ],
+    "rows": [
+      {
+        "measure": "body_fat_pct",
+        "date": "2024-01-01",
+        "value": 20,
+        "platform": "garmin_connect"
+      }
+    ]
+  },
+  {
+    "name": "a weight outside SweatStack's range gives nothing",
+    "summaryType": "bodyComps",
+    "summaries": [
+      {
+        "userId": "garmin-user-1",
+        "summaryId": "x-15",
+        "measurementTimeInSeconds": 1439812800,
+        "weightInGrams": 751732
+      }
+    ],
+    "rows": []
+  },
+  {
+    "name": "the date is the device's: 02:00 UTC on a device 3 hours behind is the day before",
+    "summaryType": "bodyComps",
+    "summaries": [
+      {
+        "userId": "garmin-user-1",
+        "summaryId": "x-16",
+        "measurementTimeInSeconds": 1710727200,
+        "measurementTimeOffsetInSeconds": -10800,
+        "weightInGrams": 80000
+      }
+    ],
+    "rows": [
+      {
+        "measure": "body_mass",
+        "date": "2024-03-17",
+        "value": 80,
+        "platform": "garmin_connect"
+      }
+    ]
+  },
+  {
+    "name": "two weigh-ins on one day, the first across midnight: the last one wins",
+    "summaryType": "bodyComps",
+    "summaries": [
+      {
+        "userId": "garmin-user-1",
+        "summaryId": "x-17",
+        "measurementTimeInSeconds": 1794094200,
+        "measurementTimeOffsetInSeconds": 3600,
+        "weightInGrams": 70500
+      },
+      {
+        "userId": "garmin-user-1",
+        "summaryId": "x-18",
+        "measurementTimeInSeconds": 1794119400,
+        "measurementTimeOffsetInSeconds": 3600,
+        "weightInGrams": 70900
+      }
+    ],
+    "rows": [
+      {
+        "measure": "body_mass",
+        "date": "2026-11-08",
+        "value": 70.9,
+        "platform": "garmin_connect"
+      }
+    ]
+  },
+  {
+    "name": "whole grams round to tenths of a kilo, a half up",
+    "summaryType": "bodyComps",
+    "summaries": [
+      {
+        "userId": "garmin-user-1",
+        "summaryId": "x-19",
+        "measurementTimeInSeconds": 1793516400,
+        "weightInGrams": 75350
+      },
+      {
+        "userId": "garmin-user-1",
+        "summaryId": "x-20",
+        "measurementTimeInSeconds": 1793602800,
+        "weightInGrams": 65550
+      },
+      {
+        "userId": "garmin-user-1",
+        "summaryId": "x-21",
+        "measurementTimeInSeconds": 1793689200,
+        "weightInGrams": 70250
+      },
+      {
+        "userId": "garmin-user-1",
+        "summaryId": "x-22",
+        "measurementTimeInSeconds": 1793775600,
+        "weightInGrams": 70750
+      },
+      {
+        "userId": "garmin-user-1",
+        "summaryId": "x-23",
+        "measurementTimeInSeconds": 1793862000,
+        "weightInGrams": 70249
+      }
+    ],
+    "rows": [
+      {
+        "measure": "body_mass",
+        "date": "2026-11-01",
+        "value": 75.4,
+        "platform": "garmin_connect"
+      },
+      {
+        "measure": "body_mass",
+        "date": "2026-11-02",
+        "value": 65.6,
+        "platform": "garmin_connect"
+      },
+      {
+        "measure": "body_mass",
+        "date": "2026-11-03",
+        "value": 70.3,
+        "platform": "garmin_connect"
+      },
+      {
+        "measure": "body_mass",
+        "date": "2026-11-04",
+        "value": 70.8,
+        "platform": "garmin_connect"
+      },
+      {
+        "measure": "body_mass",
+        "date": "2026-11-05",
+        "value": 70.2,
+        "platform": "garmin_connect"
+      }
+    ]
+  }
+]

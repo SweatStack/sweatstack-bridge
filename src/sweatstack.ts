@@ -3,11 +3,13 @@ import type { Config } from "./config";
 import type { Database } from "./db";
 import type { Deps } from "./deps";
 import { outbound } from "./http";
-import type { CapabilityMap, DownloadedFile } from "./providers/types";
+import type { CapabilityMap, DailyValue, DownloadedFile } from "./providers/types";
 
 /** The athlete's browser may be waiting on this call, so it can't take long. */
 const REQUEST_TIMEOUT_MS = 2_000;
 const UPLOAD_TIMEOUT_MS = 30_000;
+/** Nobody waits on a daily value, so it can take its time. */
+const DAILY_TIMEOUT_MS = 10_000;
 
 /** A token this close to its end isn't worth starting a request with. */
 const TOKEN_EXPIRY_MARGIN_SECONDS = 30;
@@ -107,24 +109,44 @@ export async function deleteConnection(services: SweatStackServices, provider: s
   if (!response.ok) throw new SweatStackError(response.status);
 }
 
-/** All the bridge ever does as a user, so that's all a token it holds can do. */
-const USER_TOKEN_SCOPE = "activities:write";
+/**
+ * What the bridge does as a user, each with a token that can do only that. Apart, so an app that hasn't ticked
+ * what one needs loses that one alone. The holder is where the token is cached.
+ */
+const PURPOSES = {
+  files: { scope: "activities:write", holder: (userId: string) => userId },
+  wellness: { scope: "wellness:write", holder: (userId: string) => `${userId} wellness` },
+} as const;
+
+type Purpose = keyof typeof PURPOSES;
 
 /** A token as this user, cached for its short life because each mint leaves a row at SweatStack. */
-async function userToken(services: SweatStackServices, userId: string): Promise<string> {
+async function userToken(services: SweatStackServices, userId: string, purpose: Purpose): Promise<string> {
   const { config, db, deps } = services;
-  const cached = await db.sweatstackToken(userId, deps.now() + TOKEN_EXPIRY_MARGIN_SECONDS);
+  const { scope, holder } = PURPOSES[purpose];
+  const cached = await db.sweatstackToken(holder(userId), deps.now() + TOKEN_EXPIRY_MARGIN_SECONDS);
   if (cached !== null) return cached;
 
   const response = await callAsApp(services, `/api/v1/applications/${config.appId}/users/${userId}/token`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ scope: USER_TOKEN_SCOPE }),
+    body: JSON.stringify({ scope }),
   });
   if (!response.ok) throw new SweatStackError(response.status);
   const { access_token: accessToken, expires_in: expiresIn } = (await response.json()) as { access_token: string; expires_in: number };
-  await db.saveSweatstackToken(userId, accessToken, deps.now() + expiresIn);
+  await db.saveSweatstackToken(holder(userId), accessToken, deps.now() + expiresIn);
   return accessToken;
+}
+
+/**
+ * A call as the user. A cached token can have gone bad, and a new one settles that. A 403 can't be fixed
+ * that way: the token was minted to hold the one scope the call needs.
+ */
+async function callAsUser(services: SweatStackServices, userId: string, purpose: Purpose, request: (token: string) => Promise<Response>): Promise<Response> {
+  const response = await request(await userToken(services, userId, purpose));
+  if (response.status !== 401) return response;
+  await services.db.deleteSweatstackToken(PURPOSES[purpose].holder(userId));
+  return request(await userToken(services, userId, purpose));
 }
 
 /**
@@ -138,27 +160,39 @@ export async function uploadActivityFile(
   services: SweatStackServices,
   upload: { userId: string; platform: string; externalId: string; file: DownloadedFile },
 ): Promise<{ accepted: boolean }> {
-  const attempt = async () => {
+  const response = await callAsUser(services, upload.userId, "files", (token) => {
     const form = new FormData();
     form.append("files", new File([upload.file.bytes], upload.file.filename));
     form.append("external_id", upload.externalId);
     form.append("platform", upload.platform);
-    return call(
-      services,
-      "/api/v1/activities/upload",
-      { method: "POST", headers: { Authorization: `Bearer ${await userToken(services, upload.userId)}` }, body: form },
-      UPLOAD_TIMEOUT_MS,
-    );
-  };
-
-  // A cached token can have gone bad, and a new one settles that. A 403 can't be fixed that way: the token
-  // was minted to hold the one scope an upload needs.
-  let response = await attempt();
-  if (response.status === 401) {
-    await services.db.deleteSweatstackToken(upload.userId);
-    response = await attempt();
-  }
+    return call(services, "/api/v1/activities/upload", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form }, UPLOAD_TIMEOUT_MS);
+  });
   if (!response.ok) throw new SweatStackError(response.status);
   const { sources } = (await response.json()) as { sources?: { status?: string }[] };
   return { accepted: sources?.[0]?.status !== "failed" };
+}
+
+/**
+ * Writes one daily value as the athlete, naming the platform it came from. It replaces whatever the day
+ * held, so sending the same value again is safe.
+ *
+ * @returns whether SweatStack took the value, as opposed to refusing that value in particular, as it does
+ * one outside the measure's range.
+ */
+export async function writeDaily(services: SweatStackServices, daily: DailyValue & { userId: string; platform: string }): Promise<{ accepted: boolean }> {
+  const response = await callAsUser(services, daily.userId, "wellness", (token) =>
+    call(
+      services,
+      `/api/v1/dailies/${encodeURIComponent(daily.measure)}`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ date: daily.date, value: daily.value, platform: daily.platform }),
+      },
+      DAILY_TIMEOUT_MS,
+    ),
+  );
+  if (response.status === 422) return { accepted: false };
+  if (!response.ok) throw new SweatStackError(response.status);
+  return { accepted: true };
 }

@@ -80,6 +80,25 @@ describe("npm run status", () => {
     expect(text).toContain("Tick write for Activities");
   });
 
+  it("names a failure with its fix: the app hasn't ticked write for Wellness", async () => {
+    w = world({ settings: { GARMIN_APP_OFFERS: "activities,activity_history,wellness" } });
+    client = await w.register();
+    const ines = { userId: "garmin-ines", permissions: [...ALL_PERMISSIONS, "HEALTH_EXPORT"] };
+    await w.signIn(client, ines);
+    await w.settled();
+    await w.webhook("dailies", { dailies: [{ userId: ines.userId, calendarDate: "2026-11-08", restingHeartRateInBeatsPerMinute: 52 }] });
+    await w.settled();
+    const text = await report({ wellnessOffered: true });
+    expect(text).toContain("wellness: sweatstack_400, 1 time");
+    expect(text).toContain("Tick write for Wellness");
+    expect(text).toContain(`Last wellness: ${new Date(w.clock.now * 1000).toISOString().slice(0, 16).replace("T", " ")} UTC`);
+  });
+
+  it("says when no wellness has arrived, only for an app that offers it", async () => {
+    expect(await report()).not.toContain("Last wellness");
+    expect(await report({ wellnessOffered: true })).toContain("Last wellness: none on record. If you expect some, see RUNBOOK.md: Wellness");
+  });
+
   it("leaves out everything that isn't safe to share", async () => {
     const { sub } = await w.signIn(client, kari);
     await w.settled();

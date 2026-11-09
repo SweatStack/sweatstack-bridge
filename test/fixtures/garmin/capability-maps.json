@@ -4,7 +4,8 @@
     "state": {
       "permissions": null,
       "needsReconnect": false,
-      "backfillDone": false
+      "backfillDone": false,
+      "wellnessHistoryDone": false
     },
     "capabilities": {
       "activities": "syncing",
@@ -21,7 +22,8 @@
         "HISTORICAL_DATA_EXPORT"
       ],
       "needsReconnect": false,
-      "backfillDone": false
+      "backfillDone": false,
+      "wellnessHistoryDone": false
     },
     "capabilities": {
       "activities": "syncing",
@@ -38,7 +40,8 @@
         "HISTORICAL_DATA_EXPORT"
       ],
       "needsReconnect": false,
-      "backfillDone": true
+      "backfillDone": true,
+      "wellnessHistoryDone": false
     },
     "capabilities": {
       "activities": "ready",
@@ -54,7 +57,8 @@
         "HISTORICAL_DATA_EXPORT"
       ],
       "needsReconnect": false,
-      "backfillDone": false
+      "backfillDone": false,
+      "wellnessHistoryDone": false
     },
     "capabilities": {
       "activities": "action_required",
@@ -70,7 +74,8 @@
         "ACTIVITY_EXPORT"
       ],
       "needsReconnect": false,
-      "backfillDone": false
+      "backfillDone": false,
+      "wellnessHistoryDone": false
     },
     "capabilities": {
       "activities": "syncing",
@@ -84,7 +89,8 @@
     "state": {
       "permissions": [],
       "needsReconnect": false,
-      "backfillDone": false
+      "backfillDone": false,
+      "wellnessHistoryDone": false
     },
     "capabilities": {
       "activities": "action_required",
@@ -101,7 +107,8 @@
         "HISTORICAL_DATA_EXPORT"
       ],
       "needsReconnect": true,
-      "backfillDone": true
+      "backfillDone": true,
+      "wellnessHistoryDone": false
     },
     "capabilities": {
       "activities": "action_required",
@@ -118,7 +125,8 @@
         "ACTIVITY_EXPORT"
       ],
       "needsReconnect": false,
-      "backfillDone": false
+      "backfillDone": false,
+      "wellnessHistoryDone": false
     },
     "capabilities": {
       "activities": "ready",
@@ -133,7 +141,8 @@
     "state": {
       "permissions": null,
       "needsReconnect": false,
-      "backfillDone": false
+      "backfillDone": false,
+      "wellnessHistoryDone": false
     },
     "capabilities": {
       "activities": "ready",
@@ -148,7 +157,8 @@
     "state": {
       "permissions": [],
       "needsReconnect": false,
-      "backfillDone": false
+      "backfillDone": false,
+      "wellnessHistoryDone": false
     },
     "capabilities": {
       "activities": "action_required",
@@ -165,7 +175,8 @@
         "ACTIVITY_EXPORT"
       ],
       "needsReconnect": true,
-      "backfillDone": false
+      "backfillDone": false,
+      "wellnessHistoryDone": false
     },
     "capabilities": {
       "activities": "action_required",
@@ -175,7 +186,7 @@
     }
   },
   {
-    "name": "the app has wellness and workouts too, which this version doesn't carry yet",
+    "name": "the app has wellness and workouts too: wellness is carried, workouts aren't yet",
     "offers": "activities,activity_history,wellness,workouts",
     "state": {
       "permissions": [
@@ -185,12 +196,13 @@
         "WORKOUT_IMPORT"
       ],
       "needsReconnect": false,
-      "backfillDone": true
+      "backfillDone": true,
+      "wellnessHistoryDone": true
     },
     "capabilities": {
       "activities": "ready",
       "activity_history": "ready",
-      "wellness": "unavailable",
+      "wellness": "ready",
       "workouts": "unavailable"
     }
   },
@@ -202,12 +214,145 @@
         "ACTIVITY_EXPORT"
       ],
       "needsReconnect": false,
-      "backfillDone": true
+      "backfillDone": true,
+      "wellnessHistoryDone": false
     },
     "capabilities": {
       "activities": "unavailable",
       "activity_history": "unavailable",
       "wellness": "unavailable",
+      "workouts": "unavailable"
+    }
+  },
+  {
+    "name": "wellness on offer, its history not asked for yet",
+    "offers": "activities,activity_history,wellness",
+    "state": {
+      "permissions": [
+        "ACTIVITY_EXPORT",
+        "HISTORICAL_DATA_EXPORT",
+        "HEALTH_EXPORT"
+      ],
+      "needsReconnect": false,
+      "backfillDone": true,
+      "wellnessHistoryDone": false
+    },
+    "capabilities": {
+      "activities": "ready",
+      "activity_history": "ready",
+      "wellness": "syncing",
+      "workouts": "unavailable"
+    }
+  },
+  {
+    "name": "wellness on offer, its history asked for",
+    "offers": "activities,activity_history,wellness",
+    "state": {
+      "permissions": [
+        "ACTIVITY_EXPORT",
+        "HISTORICAL_DATA_EXPORT",
+        "HEALTH_EXPORT"
+      ],
+      "needsReconnect": false,
+      "backfillDone": true,
+      "wellnessHistoryDone": true
+    },
+    "capabilities": {
+      "activities": "ready",
+      "activity_history": "ready",
+      "wellness": "ready",
+      "workouts": "unavailable"
+    }
+  },
+  {
+    "name": "wellness on offer, permissions not known yet",
+    "offers": "activities,activity_history,wellness",
+    "state": {
+      "permissions": null,
+      "needsReconnect": false,
+      "backfillDone": false,
+      "wellnessHistoryDone": false
+    },
+    "capabilities": {
+      "activities": "syncing",
+      "activity_history": "syncing",
+      "wellness": "syncing",
+      "workouts": "unavailable"
+    }
+  },
+  {
+    "name": "wellness on offer, and the athlete didn't share their health data",
+    "offers": "activities,activity_history,wellness",
+    "state": {
+      "permissions": [
+        "ACTIVITY_EXPORT",
+        "HISTORICAL_DATA_EXPORT"
+      ],
+      "needsReconnect": false,
+      "backfillDone": true,
+      "wellnessHistoryDone": false
+    },
+    "capabilities": {
+      "activities": "ready",
+      "activity_history": "ready",
+      "wellness": "action_required",
+      "workouts": "unavailable"
+    }
+  },
+  {
+    "name": "wellness on offer, and the grant is gone",
+    "offers": "activities,activity_history,wellness",
+    "state": {
+      "permissions": [
+        "ACTIVITY_EXPORT",
+        "HISTORICAL_DATA_EXPORT",
+        "HEALTH_EXPORT"
+      ],
+      "needsReconnect": true,
+      "backfillDone": true,
+      "wellnessHistoryDone": true
+    },
+    "capabilities": {
+      "activities": "action_required",
+      "activity_history": "action_required",
+      "wellness": "action_required",
+      "workouts": "unavailable"
+    }
+  },
+  {
+    "name": "wellness without history, as on Garmin's Starter Access: nothing to wait for",
+    "offers": "activities,wellness",
+    "state": {
+      "permissions": [
+        "ACTIVITY_EXPORT",
+        "HEALTH_EXPORT"
+      ],
+      "needsReconnect": false,
+      "backfillDone": false,
+      "wellnessHistoryDone": false
+    },
+    "capabilities": {
+      "activities": "ready",
+      "activity_history": "unavailable",
+      "wellness": "ready",
+      "workouts": "unavailable"
+    }
+  },
+  {
+    "name": "wellness without history, and the athlete didn't share their health data",
+    "offers": "activities,wellness",
+    "state": {
+      "permissions": [
+        "ACTIVITY_EXPORT"
+      ],
+      "needsReconnect": false,
+      "backfillDone": false,
+      "wellnessHistoryDone": false
+    },
+    "capabilities": {
+      "activities": "ready",
+      "activity_history": "unavailable",
+      "wellness": "action_required",
       "workouts": "unavailable"
     }
   }

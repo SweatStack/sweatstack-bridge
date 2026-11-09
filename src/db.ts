@@ -38,6 +38,7 @@ export interface ConnectionRow {
   backfill_cursor: string | null;
   backfill_done_at: number | null;
   consented_at: number;
+  wellness_history_done_at: number | null;
 }
 
 export interface Consent {
@@ -53,7 +54,19 @@ export interface Consent {
 
 export type MetaKey = "webhook_secret" | "subject_key" | "signing_key";
 
-export type JobKind = "activity_file" | "declare" | "permissions_change" | "backfill" | "deregistration" | "refresh_grant" | "expire_unclaimed";
+export type JobKind =
+  | "activity_file"
+  | "wellness"
+  | "declare"
+  | "permissions_change"
+  | "backfill"
+  | "wellness_history"
+  | "deregistration"
+  | "refresh_grant"
+  | "expire_unclaimed";
+
+/** What a consent or a permission change may set off. */
+export type FollowUp = "permissions_change" | "backfill" | "wellness_history";
 
 export interface JobRow {
   id: number;
@@ -73,6 +86,8 @@ export interface JobRow {
 /** One thing a webhook said, ready to queue. */
 export type QueuedEvent =
   | { kind: "activity_file"; provider: string; sub: string; externalId: string; payload: string; now: number }
+  /** The payload is the values themselves, kept until they're written. */
+  | { kind: "wellness"; provider: string; sub: string; payload: string; now: number }
   | { kind: "permissions_change" | "deregistration"; provider: string; sub: string; now: number };
 
 /** The next run carries on, so a day when everyone is due can't become one enormous statement. */
@@ -176,7 +191,7 @@ export class Database {
    * there's still a user to ask for. What the consent still needs done goes
    * in with it, so it can't be lost, and it's due now even if an earlier try was backing off.
    */
-  async saveConsent(consent: Consent, followUps: ("permissions_change" | "backfill")[]): Promise<void> {
+  async saveConsent(consent: Consent, followUps: FollowUp[]): Promise<void> {
     const saved = this.d1
       .prepare(
         `INSERT INTO connections
@@ -198,17 +213,17 @@ export class Database {
         consent.refreshExpiresAt, consent.permissions === null ? null : JSON.stringify(consent.permissions), consent.consentedAt,
       );
     const due = this.d1
-      .prepare("UPDATE inbox SET next_attempt_at = ?, attempts = 0 WHERE sub = ? AND kind IN ('permissions_change', 'backfill') AND done_at IS NULL AND lease_until IS NULL")
+      .prepare("UPDATE inbox SET next_attempt_at = ?, attempts = 0 WHERE sub = ? AND kind IN ('permissions_change', 'backfill', 'wellness_history') AND done_at IS NULL AND lease_until IS NULL")
       .bind(consent.consentedAt, consent.sub);
     await this.d1.batch([saved, due, ...followUps.map((kind) => this.enqueueOnce(kind, consent.sub, consent.consentedAt))]);
   }
 
   /** What the platform answered, with what follows from it, together. */
-  async savePermissions(sub: string, provider: string, permissions: string[], { backfill }: { backfill: boolean }, now: number): Promise<void> {
+  async savePermissions(sub: string, provider: string, permissions: string[], followUps: ("backfill" | "wellness_history")[], now: number): Promise<void> {
     await this.d1.batch([
       this.d1.prepare("UPDATE connections SET permissions = ? WHERE sub = ?").bind(JSON.stringify(permissions), sub),
       this.enqueueStatement({ kind: "declare", provider, sub, nextAttemptAt: now, receivedAt: now }),
-      ...(backfill ? [this.enqueueOnce("backfill", sub, now)] : []),
+      ...followUps.map((kind) => this.enqueueOnce(kind, sub, now)),
     ]);
   }
 
@@ -220,6 +235,14 @@ export class Database {
   async finishBackfill(sub: string, provider: string, now: number): Promise<void> {
     await this.d1.batch([
       this.d1.prepare("UPDATE connections SET backfill_cursor = NULL, backfill_done_at = ? WHERE sub = ?").bind(now, sub),
+      this.enqueueStatement({ kind: "declare", provider, sub, nextAttemptAt: now, receivedAt: now }),
+    ]);
+  }
+
+  /** Marked together with telling SweatStack, as for the backfill. */
+  async finishWellnessHistory(sub: string, provider: string, now: number): Promise<void> {
+    await this.d1.batch([
+      this.d1.prepare("UPDATE connections SET wellness_history_done_at = ? WHERE sub = ?").bind(now, sub),
       this.enqueueStatement({ kind: "declare", provider, sub, nextAttemptAt: now, receivedAt: now }),
     ]);
   }
@@ -353,14 +376,21 @@ export class Database {
   /**
    * One atomic statement: two runs can never claim the same job. With a `sub`, only that connection's
    * jobs, so someone connecting doesn't wait behind everyone else's backlog.
+   *
+   * A connection's wellness jobs go in the order they arrived: one waits while an older one hasn't
+   * finished, running or not. A later value for a day is the newer one, so an older job that failed and
+   * ran again after it would put the older value back.
    */
   claimJob(now: number, leaseUntil: number, sub: string | null): Promise<JobRow | null> {
     return this.d1
       .prepare(
         `UPDATE inbox SET lease_until = ?1, attempts = attempts + 1
          WHERE id = (
-           SELECT id FROM inbox
+           SELECT id FROM inbox j
            WHERE done_at IS NULL AND next_attempt_at <= ?2 AND (lease_until IS NULL OR lease_until <= ?2) AND (?3 IS NULL OR sub = ?3)
+             AND NOT (kind = 'wellness' AND EXISTS (
+               SELECT 1 FROM inbox o WHERE o.kind = 'wellness' AND o.sub = j.sub AND o.done_at IS NULL AND o.id < j.id
+             ))
            ORDER BY next_attempt_at, id LIMIT 1
          )
          RETURNING *`,
@@ -389,21 +419,34 @@ export class Database {
     await this.d1.prepare("UPDATE inbox SET next_attempt_at = ?, attempts = 0, last_error = NULL, lease_until = NULL WHERE id = ?").bind(now, id).run();
   }
 
-  /** What webhooks said. A repeated ping about the same file adds nothing. */
+  /**
+   * What webhooks said. A repeated ping about the same file adds nothing. Values for an account the bridge
+   * doesn't hold are never stored: the test is in the statement, so there's nothing to read first.
+   */
   async enqueueEvents(events: QueuedEvent[]): Promise<void> {
     if (events.length === 0) return;
     await this.d1.batch(
-      events.map((event) =>
-        event.kind === "activity_file"
-          ? this.d1
+      events.map((event) => {
+        switch (event.kind) {
+          case "activity_file":
+            return this.d1
               .prepare(
                 `INSERT INTO inbox (kind, provider, sub, external_id, payload, next_attempt_at, received_at)
                  VALUES ('activity_file', ?1, ?2, ?3, ?4, ?5, ?5)
                  ON CONFLICT (kind, sub, external_id) DO NOTHING`,
               )
-              .bind(event.provider, event.sub, event.externalId, event.payload, event.now)
-          : this.enqueueStatement({ kind: event.kind, provider: event.provider, sub: event.sub, nextAttemptAt: event.now, receivedAt: event.now }),
-      ),
+              .bind(event.provider, event.sub, event.externalId, event.payload, event.now);
+          case "wellness":
+            return this.d1
+              .prepare(
+                `INSERT INTO inbox (kind, provider, sub, payload, next_attempt_at, received_at)
+                 SELECT 'wellness', ?1, ?2, ?3, ?4, ?4 WHERE EXISTS (SELECT 1 FROM connections WHERE sub = ?2)`,
+              )
+              .bind(event.provider, event.sub, event.payload, event.now);
+          default:
+            return this.enqueueStatement({ kind: event.kind, provider: event.provider, sub: event.sub, nextAttemptAt: event.now, receivedAt: event.now });
+        }
+      }),
     );
   }
 
@@ -465,13 +508,15 @@ export class Database {
       .bind(job.kind, job.provider, job.sub, job.nextAttemptAt, job.receivedAt);
   }
 
-  /** Adds a job unless one is already waiting, and adds no backfill for a connection that's had it. */
-  private enqueueOnce(kind: "permissions_change" | "backfill", sub: string, now: number): D1PreparedStatement {
+  /** Adds a job unless one is already waiting, and asks for no history a connection has already had. */
+  private enqueueOnce(kind: FollowUp, sub: string, now: number): D1PreparedStatement {
     return this.d1
       .prepare(
         `INSERT INTO inbox (kind, provider, sub, next_attempt_at, received_at)
          SELECT ?1, c.provider, c.sub, ?2, ?2 FROM connections c
-         WHERE c.sub = ?3 AND (?1 <> 'backfill' OR c.backfill_done_at IS NULL)
+         WHERE c.sub = ?3
+           AND (?1 <> 'backfill' OR c.backfill_done_at IS NULL)
+           AND (?1 <> 'wellness_history' OR c.wellness_history_done_at IS NULL)
            AND NOT EXISTS (SELECT 1 FROM inbox i WHERE i.kind = ?1 AND i.sub = c.sub AND i.done_at IS NULL)`,
       )
       .bind(kind, now, sub);

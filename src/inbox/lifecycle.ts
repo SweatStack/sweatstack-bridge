@@ -1,5 +1,6 @@
 import { declare, deregisterAtPlatform, keepGrantAlive, permissionsOf, withAccessToken, type ConnectionServices } from "../connections";
 import type { ConnectionRow, JobRow } from "../db";
+import type { Provider } from "../providers/types";
 import { log } from "../log";
 import { SweatStackError } from "../sweatstack";
 import type { JobResult } from "./queue";
@@ -29,12 +30,17 @@ async function askUntilReady<T>(services: ConnectionServices, job: JobRow, ask: 
   return ask();
 }
 
+/** The history these permissions allow asking for. A connection that's had it isn't asked again. */
+export function historyToAsk(provider: Provider, permissions: readonly string[]): ("backfill" | "wellness_history")[] {
+  return [...(provider.mayBackfill(permissions) ? ["backfill" as const] : []), ...(provider.mayRequestWellnessHistory(permissions) ? ["wellness_history" as const] : [])];
+}
+
 /** What was granted is the platform's to say, so a forged webhook can't set it and order doesn't matter. */
 export async function permissionsJob(services: ConnectionServices, connection: ConnectionRow, job: JobRow): Promise<JobResult> {
   const { db, deps, provider } = services;
   const permissions = await askUntilReady(services, job, () => withAccessToken(services, connection, (token) => provider.fetchPermissions(token)));
   if (permissions === null) return { outcome: "retry", reason: "permissions_unknown" };
-  await db.savePermissions(connection.sub, provider.name, permissions, { backfill: provider.mayBackfill(permissions) }, deps.now());
+  await db.savePermissions(connection.sub, provider.name, permissions, historyToAsk(provider, permissions), deps.now());
   return { outcome: "done" };
 }
 
@@ -59,6 +65,22 @@ export async function backfillJob(services: ConnectionServices, connection: Conn
     return { outcome: "give_up", reason: "history_refused" };
   }
   await db.finishBackfill(connection.sub, provider.name, deps.now());
+  return { outcome: "done" };
+}
+
+/**
+ * Asks once for the recent wellness history the platform keeps, which arrives as pushes. Not marked when
+ * nothing was accepted, so a later consent or permission change asks again.
+ */
+export async function wellnessHistoryJob(services: ConnectionServices, connection: ConnectionRow, job: JobRow): Promise<JobResult> {
+  const { db, deps, provider } = services;
+  if (connection.wellness_history_done_at !== null || !provider.mayRequestWellnessHistory(permissionsOf(connection))) return { outcome: "done" };
+
+  const asked = await askUntilReady(services, job, () => withAccessToken(services, connection, (token) => provider.requestWellnessHistory(token)));
+  if (asked === null) return { outcome: "retry", reason: "platform_not_ready" };
+  log("wellness_history_asked", { provider: provider.name, accepted: asked.anyAccepted });
+  if (!asked.anyAccepted) return { outcome: "give_up", reason: "history_refused" };
+  await db.finishWellnessHistory(connection.sub, provider.name, deps.now());
   return { outcome: "done" };
 }
 
