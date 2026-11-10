@@ -29,6 +29,25 @@ describe("the URLs an owner pastes", () => {
   });
 
   it.each([
+    [false, ["ACTIVITY - Activity Files", "COMMON - Deregistrations", "COMMON - User Permissions Change"]],
+    [
+      true,
+      [
+        "ACTIVITY - Activity Files",
+        "COMMON - Deregistrations",
+        "COMMON - User Permissions Change",
+        "HEALTH - Body Compositions",
+        "HEALTH - Dailies",
+        "HEALTH - HRV Summary",
+        "HEALTH - Sleeps",
+      ],
+    ],
+  ])("names Garmin's settings as its endpoint configuration does, in its order (wellness: %s)", async (wellness, settings) => {
+    const { urls } = await pasted({ wellness });
+    expect(urls.filter((entry) => entry.check === "webhook").map((entry) => entry.setting)).toEqual(settings);
+  });
+
+  it.each([
     ["an app without wellness", false, 3],
     ["an app with wellness", true, 7],
   ])("names webhooks the bridge takes, for %s, and an empty ping changes nothing", async (_name, wellness, expected) => {

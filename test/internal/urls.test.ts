@@ -15,7 +15,7 @@ describe("npm run urls", () => {
   });
 
   it("leaves the health rows out for an app that doesn't offer wellness", () => {
-    expect(webhooks()).toEqual(["activity-files", "user-permissions", "deregistrations"]);
+    expect(webhooks()).toEqual(["activity-files", "deregistrations", "user-permissions"]);
   });
 
   it.each([

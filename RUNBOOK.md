@@ -159,9 +159,9 @@ a secret, so keep the output private. It finds your bridge's address through Clo
 Open [Garmin's endpoint configuration](https://apis.garmin.com/tools/endpoints) and sign in with the consumer
 key and secret. Enable these three settings, with the URLs from the command:
 
-- Activity: Activity Files (ping)
-- Common: User Permissions Change
-- Common: Deregistrations
+- ACTIVITY - Activity Files
+- COMMON - Deregistrations
+- COMMON - User Permissions Change
 
 Leave every other setting disabled, apart from the health ones under [Wellness](#wellness) if your app offers it.
 Garmin allows one URL per setting, so any other server you had on these settings stops receiving them.
@@ -173,7 +173,7 @@ Garmin allows one URL per setting, so any other server you had on these settings
 | Activity Files | New activities and history never arrive, because Garmin announces both through this setting. A sign-in still works |
 | User Permissions Change | When an athlete changes what they share, the status and the Portal stay out of date, and history doesn't start when they allow it later |
 | Deregistrations | When an athlete removes your app in Garmin Connect, the connection stays. It only shows as needing a reconnect once the bridge next fails to use its token |
-| A health setting, or one set to ping | No dailies of that kind arrive. `npm run status` says "Last wellness: none on record" while none have |
+| A health setting | No dailies of that kind arrive. `npm run status` says "Last wellness: none on record" while none have |
 
 The bridge can't know about anything that happened before the URL was set. To correct a connection from that
 time, have the athlete sign in again.
@@ -199,7 +199,8 @@ dailies, the same values SweatStack's own Garmin connection fills. It needs your
 1. Add `wellness` to `GARMIN_APP_OFFERS` in `wrangler.jsonc`, then commit and push.
 2. On your app's Consent screen tab in SweatStack, tick write for Wellness under Data your app uses.
 3. Run `npm run urls`. In Garmin's endpoint configuration, enable the four health settings it prints, each
-   **as push**, with its URL. Leave every other health setting disabled.
+   with its URL: `HEALTH - Body Compositions`, `HEALTH - Dailies`, `HEALTH - HRV Summary` and
+   `HEALTH - Sleeps`. Leave every other health setting disabled, and save the page.
 
 Athletes are asked to share their health data on Garmin's consent screen, and athletes connected before are asked
 to reconnect if they didn't. With `activity_history` on offer too, the bridge asks Garmin for each athlete's last

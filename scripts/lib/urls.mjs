@@ -1,6 +1,7 @@
 /**
  * Where the owner of a bridge pastes each URL, per platform, in the words of the tool they paste it in.
- * The health rows are only for an app that offers wellness: anyone else leaves them disabled.
+ * Garmin's settings are named and ordered as its endpoint configuration lists them, so the owner can go
+ * down the page. The health ones are only for an app that offers wellness: anyone else leaves them disabled.
  * @param {{ wellness?: boolean }} [offers]
  * @returns {{ where: string, urls: { setting: string, url: string, check?: "discovery" | "webhook" }[] }[]}
  */
@@ -8,15 +9,15 @@ export function urlsToPaste(origin, webhookSecret, { wellness = false } = {}) {
   const provider = "garmin_connect";
   const webhook = (kind) => `${origin}/${provider}/${webhookSecret}/${kind}`;
   const endpoints = [
-    { setting: "Activity: Activity Files (ping)", url: webhook("activity-files"), check: "webhook" },
-    { setting: "Common: User Permissions Change", url: webhook("user-permissions"), check: "webhook" },
-    { setting: "Common: Deregistrations", url: webhook("deregistrations"), check: "webhook" },
+    { setting: "ACTIVITY - Activity Files", url: webhook("activity-files"), check: "webhook" },
+    { setting: "COMMON - Deregistrations", url: webhook("deregistrations"), check: "webhook" },
+    { setting: "COMMON - User Permissions Change", url: webhook("user-permissions"), check: "webhook" },
     ...(wellness
       ? [
-          { setting: "Health: Dailies (push)", url: webhook("dailies"), check: "webhook" },
-          { setting: "Health: Sleeps (push)", url: webhook("sleeps"), check: "webhook" },
-          { setting: "Health: Body Compositions (push)", url: webhook("body-compositions"), check: "webhook" },
-          { setting: "Health: HRV Summary (push)", url: webhook("hrv"), check: "webhook" },
+          { setting: "HEALTH - Body Compositions", url: webhook("body-compositions"), check: "webhook" },
+          { setting: "HEALTH - Dailies", url: webhook("dailies"), check: "webhook" },
+          { setting: "HEALTH - HRV Summary", url: webhook("hrv"), check: "webhook" },
+          { setting: "HEALTH - Sleeps", url: webhook("sleeps"), check: "webhook" },
         ]
       : []),
   ];
