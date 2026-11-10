@@ -192,6 +192,12 @@ time, have the athlete sign in again.
 npx wrangler d1 execute sweatstack-bridge --remote --command "SELECT kind, attempts, last_error, done_at FROM inbox ORDER BY id DESC LIMIT 5"
 ```
 
+If an activity gives no row, run `npx wrangler tail` and sync it again. The bridge logs why it skipped the file:
+
+- `file_skipped` with `manual`: the activity was entered by hand, so it has no file.
+- `file_skipped` with `format`: Garmin has the activity in a format the bridge doesn't relay, such as `TCX`.
+- The warning `file_ping_unreadable`: Garmin left out a field the bridge needs. Report it.
+
 ## Wellness
 
 The bridge can relay an athlete's resting heart rate, sleep duration, HRV, body mass and body fat to SweatStack as

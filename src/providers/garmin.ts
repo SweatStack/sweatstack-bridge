@@ -1,6 +1,6 @@
 import type { Deps } from "../deps";
 import { outbound } from "../http";
-import { log } from "../log";
+import { log, warn } from "../log";
 import { WELLNESS_SUMMARY_TYPES, wellnessValues } from "./garmin-wellness";
 import {
   PlatformError,
@@ -279,11 +279,23 @@ export function garmin(deps: Pick<Deps, "env" | "fetch" | "now">): Provider {
       if (kind !== ACTIVITY_FILES_WEBHOOK) return [];
       const pings = (body as { activityFiles?: unknown } | null)?.activityFiles;
       if (!Array.isArray(pings)) return [];
+      // Garmin hears 200 whatever is skipped here, so each skip is logged: an owner who imported a file and
+      // sees nothing in SweatStack reads why. Garmin's own account id is never logged.
       return (pings as ActivityFilePing[]).flatMap((ping) => {
-        // The relay takes FIT and CSV, and Garmin's other formats aren't either. A manual activity has no file.
-        if (ping.fileType !== "FIT" || ping.manual === true) return [];
+        // A manual activity has no file.
+        if (ping.manual === true) {
+          log("file_skipped", { provider: GARMIN_NAME, reason: "manual" });
+          return [];
+        }
+        // The relay takes FIT and CSV, and Garmin's other formats aren't either.
+        if (ping.fileType !== "FIT") {
+          log("file_skipped", { provider: GARMIN_NAME, reason: "format", format: typeof ping.fileType === "string" ? ping.fileType.slice(0, 16) : null });
+          return [];
+        }
         const { userId, activityId, callbackURL } = ping;
         if ((typeof userId !== "string" && typeof userId !== "number") || (typeof activityId !== "string" && typeof activityId !== "number") || typeof callbackURL !== "string") {
+          // Garmin sends these with every file, so it changed what it sends.
+          warn("file_ping_unreadable", { provider: GARMIN_NAME });
           return [];
         }
         const reference: FileReference = { callbackUrl: callbackURL, activityId: String(activityId) };

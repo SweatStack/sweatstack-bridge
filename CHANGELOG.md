@@ -3,6 +3,10 @@
 Versions follow [Semantic Versioning](https://semver.org). `npm run update` moves a deployment between
 them.
 
+## Unreleased
+
+- **A file the bridge skips is logged, with the reason:** `file_skipped` with `manual` for an activity entered by hand, which has no file, or `format` for a format the bridge doesn't relay, such as TCX. The warning `file_ping_unreadable` says that Garmin left out a field the bridge needs. Before, the bridge skipped these without a word, and Garmin still heard 200.
+
 ## 0.4.0
 
 - **`npm run verify` helps you pass Garmin's partner verification**, before or after you set Garmin to Self-hosted in SweatStack. It makes a Garmin sign-in link that needs no SweatStack, and a walk to import. The runbook's section "Pass Garmin's verification" has the steps. Your app works without the verification.

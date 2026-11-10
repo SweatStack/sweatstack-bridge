@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { accessToken, NeedsReconnect, RefreshInProgress, type ConnectionServices } from "../../src/connections";
 import { Database, type ConnectionRow } from "../../src/db";
 import { garmin as garminProvider } from "../../src/providers/garmin";
@@ -273,6 +273,47 @@ describe("a job for a connection that's gone", () => {
   });
 });
 
+/** An owner who imports a file and sees nothing in SweatStack reads why in the logs. */
+describe("a file the bridge skips says why", () => {
+  let w: ReturnType<typeof world>;
+  let logged: { log: string[]; warn: string[] };
+
+  beforeEach(async () => {
+    await resetDatabase({ withSigningKey: true });
+    w = world();
+    await w.signIn(await w.register(), kari);
+    logged = { log: [], warn: [] };
+    vi.spyOn(console, "log").mockImplementation((line: string) => logged.log.push(line));
+    vi.spyOn(console, "warn").mockImplementation((line: string) => logged.warn.push(line));
+  });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it.each([
+    ["an activity entered by hand, which has no file", { manual: true, fileType: undefined }, { reason: "manual" }],
+    ["a format the relay doesn't take", { fileType: "TCX" }, { reason: "format", format: "TCX" }],
+  ])("logs %s", async (_name, overrides, fields) => {
+    await w.ping(w.garmin.fileReady(kari, "1001", overrides));
+    expect(logged.log.map((line) => JSON.parse(line))).toContainEqual({ event: "file_skipped", provider: "garmin_connect", ...fields });
+    expect(logged.warn).toEqual([]);
+  });
+
+  it.each([
+    ["no account", { userId: undefined }],
+    ["no activity id", { activityId: null }],
+    ["no address", { callbackURL: 42 }],
+  ])("warns about a file it can't read: %s", async (_name, overrides) => {
+    await w.ping(w.garmin.fileReady(kari, "1001", overrides));
+    expect(logged.warn.map((line) => JSON.parse(line))).toEqual([{ event: "file_ping_unreadable", provider: "garmin_connect" }]);
+  });
+
+  it("logs nothing for a file it relays", async () => {
+    await w.ping(w.garmin.fileReady(kari, "1001"));
+    expect(w.sweatstack.uploads).toHaveLength(1);
+    expect([...logged.log, ...logged.warn].filter((line) => line.includes("file_skipped") || line.includes("file_ping_unreadable"))).toEqual([]);
+  });
+});
+
 describe("no secret reaches the logs", () => {
   it("logs no token, file address, client secret or webhook secret during a whole relay", async () => {
     const lines: string[] = [];
@@ -288,6 +329,8 @@ describe("no secret reaches the logs", () => {
       w.garmin.failures.file.push(503);
       await w.ping(file);
       await w.ping({ ...file, activityId: "1002", callbackURL: "https://attacker.test/secret-path?token=secret" });
+      await w.ping({ ...file, activityId: "1003", fileType: "TCX" });
+      await w.ping({ ...file, activityId: undefined });
       await w.webhook("epochs", {});
       await w.webhook("activity-files", {}, { secret: "a-guessed-secret" });
       const connection = await row(sub);
@@ -297,6 +340,8 @@ describe("no secret reaches the logs", () => {
         expect(logged).not.toContain(secret);
       }
       expect(logged).toContain("file_refused");
+      expect(logged).toContain("file_skipped");
+      expect(logged).toContain("file_ping_unreadable");
       expect(logged).toContain("webhook_refused");
     } finally {
       Object.assign(console, original);

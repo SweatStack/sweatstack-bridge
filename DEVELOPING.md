@@ -135,7 +135,8 @@ Check every change against these.
 6. **Secrets stay out of logs and output.** Logging goes through `src/log.ts`. It never receives a token, a
    platform's file URL or a request URL, because the webhook path holds a secret. Secrets are compared in
    constant time. `warn` is for what the owner should look at, and Cloudflare's logs show it as a warning:
-   `sweatstack_not_connected`, `push_waiting_for_user` and `webhook_refused`.
+   `sweatstack_not_connected`, `push_waiting_for_user`, `webhook_refused` and `file_ping_unreadable`. A file
+   the bridge skips is logged as `file_skipped`, with the reason, because Garmin hears 200 either way.
 7. **Migrations only add, run before the code deploys, and are never edited once published.** The running
    version then always works with the next schema, and a database that has already run a migration can't
    miss a change to it. A test holds that.
