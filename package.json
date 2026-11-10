@@ -14,6 +14,7 @@
     "status": "node scripts/status.mjs",
     "update": "node scripts/update.mjs",
     "urls": "node scripts/urls.mjs",
+    "verify": "node scripts/verify.mjs",
     "test": "vitest run",
     "test:staging": "vitest run --config vitest.staging.config.ts",
     "test:scripts": "node --test scripts/test-scripts.mjs",
@@ -51,6 +52,7 @@
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.5.1",
     "@cloudflare/workers-types": "^5.20261104.1",
+    "@garmin/fitsdk": "^21.221.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.0",
     "wrangler": "^4.157.0"

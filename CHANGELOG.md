@@ -3,6 +3,11 @@
 Versions follow [Semantic Versioning](https://semver.org). `npm run update` moves a deployment between
 them.
 
+## Unreleased
+
+- **`npm run verify` helps you pass Garmin's partner verification**, before or after you set Garmin to Self-hosted in SweatStack. It makes a Garmin sign-in link that needs no SweatStack, and a walk to import. The runbook's section "Pass Garmin's verification" has the steps. Your app works without the verification.
+- **Warnings in the logs** say why nothing reaches SweatStack: `sweatstack_not_connected` when SweatStack answers that Garmin isn't Self-hosted, with the fix, `push_waiting_for_user` once for each push whose athlete has no user yet, and `webhook_refused` with the reason for each push the bridge refused. Garmin counts each refused push as an error.
+
 ## 0.3.0
 
 - **Wellness:** resting heart rate, sleep duration, HRV, body mass and body fat from Garmin's health summaries, written to SweatStack as the athlete's dailies with `platform` `garmin_connect`, the same values SweatStack's own Garmin connection fills. A later value replaces what the day held, including one the athlete entered. With history on offer, the last 28 days are asked for when an athlete connects. To turn it on, see the runbook's Wellness section: your Garmin app needs the Health API. **If `GARMIN_APP_OFFERS` already names `wellness`, this update turns it on**, and athletes who didn't share their health data are asked to reconnect: before updating, tick write for Wellness on your app's Consent screen tab and set up the four health settings in Garmin's tool. Without `wellness` in `GARMIN_APP_OFFERS`, nothing changes.

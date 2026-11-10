@@ -5,6 +5,8 @@ node_modules/
 .env.*
 !.env.example
 .DS_Store
+# The walk that `npm run verify` makes for Garmin's verification, new on each run.
+verification-walk.fit
 # Internal planning notes. They discuss matters that aren't settled in public.
 plans/
 tail.jsonl

@@ -2,7 +2,7 @@ import { declare, NeedsReconnect, permissionsOf, RefreshInProgress, withAccessTo
 import { readConfig } from "../config";
 import { Database, type ConnectionRow, type JobRow } from "../db";
 import type { Deps } from "../deps";
-import { log } from "../log";
+import { log, warn } from "../log";
 import { findProvider } from "../providers";
 import { PlatformError, type DailyValue } from "../providers/types";
 import { deleteConnection, SweatStackError, uploadActivityFile, writeDaily } from "../sweatstack";
@@ -71,7 +71,7 @@ async function runJob(deps: Deps, db: Database, job: JobRow): Promise<JobResult>
 async function relayFile(services: ConnectionServices, connection: ConnectionRow, job: JobRow): Promise<JobResult> {
   const { provider } = services;
   // A file is never uploaded before SweatStack has said whose it is.
-  if (connection.user_id === null) return { outcome: "retry", reason: "waiting_for_user" };
+  if (connection.user_id === null) return waitingForUser(services, job);
   if (job.payload === null || job.external_id === null) return { outcome: "give_up", reason: "invalid_job" };
   if (!provider.mayRelayFiles(permissionsOf(connection))) return { outcome: "done" };
 
@@ -93,13 +93,23 @@ async function relayFile(services: ConnectionServices, connection: ConnectionRow
 }
 
 /**
+ * A push for a connection that SweatStack hasn't named a user for. Said once, on the job's first run: the
+ * athlete may still be on SweatStack's page, or nobody will ever claim it, as in a platform's partner
+ * verification.
+ */
+function waitingForUser({ provider }: ConnectionServices, job: JobRow): JobResult {
+  if (job.attempts === 1) warn("push_waiting_for_user", { provider: provider.name, kind: job.kind });
+  return { outcome: "retry", reason: "waiting_for_user" };
+}
+
+/**
  * Writes the values a push brought, each replacing what its day held. A value SweatStack refuses, as one
  * outside its range, is skipped: the others still count. A retry writes them all again, which is safe.
  * The log says how many, never what.
  */
 async function relayWellness(services: ConnectionServices, connection: ConnectionRow, job: JobRow): Promise<JobResult> {
   const { provider } = services;
-  if (connection.user_id === null) return { outcome: "retry", reason: "waiting_for_user" };
+  if (connection.user_id === null) return waitingForUser(services, job);
   if (job.payload === null) return { outcome: "give_up", reason: "invalid_job" };
   if (!provider.mayRelayWellness(permissionsOf(connection))) return { outcome: "done" };
 

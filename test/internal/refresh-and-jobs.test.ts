@@ -274,10 +274,11 @@ describe("a job for a connection that's gone", () => {
 });
 
 describe("no secret reaches the logs", () => {
-  it("logs no token, file address or client secret during a whole relay", async () => {
+  it("logs no token, file address, client secret or webhook secret during a whole relay", async () => {
     const lines: string[] = [];
-    const original = console.log;
+    const original = { log: console.log, warn: console.warn };
     console.log = (line: string) => lines.push(String(line));
+    console.warn = (line: string) => lines.push(String(line));
     try {
       await resetDatabase({ withSigningKey: true });
       const w = world();
@@ -287,14 +288,18 @@ describe("no secret reaches the logs", () => {
       w.garmin.failures.file.push(503);
       await w.ping(file);
       await w.ping({ ...file, activityId: "1002", callbackURL: "https://attacker.test/secret-path?token=secret" });
+      await w.webhook("epochs", {});
+      await w.webhook("activity-files", {}, { secret: "a-guessed-secret" });
       const connection = await row(sub);
+      const webhookSecret = (await env.DB.prepare("SELECT value FROM meta WHERE key = 'webhook_secret'").first<{ value: string }>())?.value as string;
       const logged = lines.join("\n");
-      for (const secret of [connection.access_token, connection.refresh_token, client.clientSecret, file.callbackURL, "secret-path", kari.userId]) {
+      for (const secret of [connection.access_token, connection.refresh_token, client.clientSecret, file.callbackURL, "secret-path", kari.userId, webhookSecret, "a-guessed-secret"]) {
         expect(logged).not.toContain(secret);
       }
       expect(logged).toContain("file_refused");
+      expect(logged).toContain("webhook_refused");
     } finally {
-      console.log = original;
+      Object.assign(console, original);
     }
   });
 });

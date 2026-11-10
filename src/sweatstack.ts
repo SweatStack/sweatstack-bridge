@@ -3,6 +3,7 @@ import type { Config } from "./config";
 import type { Database } from "./db";
 import type { Deps } from "./deps";
 import { outbound } from "./http";
+import { warn } from "./log";
 import type { CapabilityMap, DailyValue, DownloadedFile } from "./providers/types";
 
 /** The athlete's browser may be waiting on this call, so it can't take long. */
@@ -67,14 +68,23 @@ async function clientToken(services: SweatStackServices): Promise<string> {
   return accessToken;
 }
 
-/** A call as the app. A `401` means the cached token has gone bad, so it gets one new token and one more try. */
+/** What a `409` means on every call as the app, and what the owner does about it. */
+const NOT_CONNECTED_FIX = "Set this platform to Self-hosted, with your issuer URL, on your app's Data sources tab in SweatStack.";
+
+/**
+ * A call as the app. A `401` means the cached token has gone bad, so it gets one new token and one more try.
+ * A `409` means SweatStack isn't connected to this bridge yet, which the owner should hear about.
+ */
 async function callAsApp(services: SweatStackServices, path: string, init: RequestInit): Promise<Response> {
   const attempt = async () =>
     call(services, path, { ...init, headers: { ...init.headers, Authorization: `Bearer ${await clientToken(services)}` } });
-  const response = await attempt();
-  if (response.status !== 401) return response;
-  await services.db.deleteSweatstackToken(CLIENT_TOKEN_HOLDER);
-  return attempt();
+  let response = await attempt();
+  if (response.status === 401) {
+    await services.db.deleteSweatstackToken(CLIENT_TOKEN_HOLDER);
+    response = await attempt();
+  }
+  if (response.status === 409) warn("sweatstack_not_connected", { fix: NOT_CONNECTED_FIX });
+  return response;
 }
 
 /**

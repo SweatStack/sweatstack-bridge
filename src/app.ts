@@ -5,6 +5,7 @@ import { Database } from "./db";
 import type { Deps } from "./deps";
 import { disconnect } from "./flows/disconnect";
 import { platformCallback } from "./flows/platform-callback";
+import { start } from "./flows/start";
 import { webhook } from "./flows/webhook";
 import { log } from "./log";
 import { authorize } from "./oidc/authorize";
@@ -29,6 +30,7 @@ export function createApp(deps: Deps): Hono {
   platform.get("/oidc/:provider/jwks", jwks);
   platform.post("/oidc/:provider/register", register);
   platform.post("/oidc/:provider/disconnect", disconnect);
+  platform.get("/start/:provider/:flow", start);
   platform.get("/callback/:provider", platformCallback);
   platform.post("/:provider/:secret/:kind", webhook);
 
@@ -56,7 +58,7 @@ function servesPlatform(deps: Deps): MiddlewareHandler<{ Variables: PlatformVari
   return async (c, next) => {
     const url = new URL(c.req.url);
     const [, first, second] = url.pathname.split("/");
-    const isWebhook = first !== "oidc" && first !== "callback";
+    const isWebhook = first !== "oidc" && first !== "start" && first !== "callback";
     const name = isWebhook ? first : second;
 
     const provider = name === undefined ? undefined : findProvider(name, deps);

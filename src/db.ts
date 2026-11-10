@@ -150,6 +150,14 @@ export class Database {
       .run();
   }
 
+  /** A flow that the platform's redirect could still take. Reading it takes nothing. */
+  openFlow(id: string, provider: string, now: number): Promise<FlowRow | null> {
+    return this.d1
+      .prepare("SELECT * FROM flows WHERE id = ? AND provider = ? AND taken_at IS NULL AND expires_at > ?")
+      .bind(id, provider, now)
+      .first<FlowRow>();
+  }
+
   /** Takes a flow for the platform's redirect. Only one redirect can ever get it. */
   takeFlow(id: string, provider: string, now: number): Promise<FlowRow | null> {
     return this.d1

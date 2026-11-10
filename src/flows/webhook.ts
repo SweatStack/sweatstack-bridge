@@ -2,6 +2,7 @@ import type { PlatformContext } from "../context";
 import { deriveSubject, secureEqual } from "../crypto";
 import type { QueuedEvent } from "../db";
 import { drain } from "../inbox/worker";
+import { warn } from "../log";
 
 /**
  * A ping from the platform: stored, acknowledged at once, then worked on behind the answer. The path
@@ -10,14 +11,25 @@ import { drain } from "../inbox/worker";
 export async function webhook(c: PlatformContext): Promise<Response> {
   const { db, deps, provider } = c.var;
 
+  // The platform counts each refusal as an error, and says nothing more, so the owner reads why here. The
+  // kind is only named once the secret shows it's the platform's own.
   const secret = await db.meta("webhook_secret");
-  if (secret === null || !(await secureEqual(c.req.param("secret") ?? "", secret))) return c.notFound();
+  if (secret === null || !(await secureEqual(c.req.param("secret") ?? "", secret))) {
+    warn("webhook_refused", { provider: provider.name, reason: "unknown_secret" });
+    return c.notFound();
+  }
 
   const kind = c.req.param("kind") ?? "";
-  if (!provider.webhookKinds.includes(kind)) return c.notFound();
+  if (!provider.webhookKinds.includes(kind)) {
+    warn("webhook_refused", { provider: provider.name, reason: "unknown_kind", kind });
+    return c.notFound();
+  }
 
   const body = await c.req.json<unknown>().catch(() => undefined);
-  if (body === undefined) return c.json({ error: "invalid_request" }, 400);
+  if (body === undefined) {
+    warn("webhook_refused", { provider: provider.name, reason: "invalid_body" });
+    return c.json({ error: "invalid_request" }, 400);
+  }
 
   const subjectKey = await db.meta("subject_key");
   if (subjectKey === null) throw new Error("The database has no subject key");

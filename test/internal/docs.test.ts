@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import devVars from "../../.dev.vars.example?raw";
 import packageJson from "../../package.json";
+import { RUNBOOK_SECTION } from "../../scripts/lib/verify.mjs";
 
 const pages = import.meta.glob("/*.md", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
 const repositoryFiles = Object.keys(import.meta.glob(["/*", "/scripts/**", "/migrations/*", "/src/**", "/test/**"]));
@@ -35,6 +36,11 @@ describe("the documentation", () => {
       }
     }
     expect(broken).toEqual([]);
+  });
+
+  it("has the heading that a sign-in for Garmin's verification lands on", () => {
+    const [page, heading] = RUNBOOK_SECTION.replace("https://github.com/SweatStack/sweatstack-bridge/blob/main", "").split("#");
+    expect(anchorsIn(pages[page as string] ?? "")).toContain(heading);
   });
 
   it("explains every setting in the runbook", () => {

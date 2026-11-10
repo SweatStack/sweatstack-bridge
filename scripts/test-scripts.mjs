@@ -6,7 +6,9 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
+import { Decoder, Stream } from "@garmin/fitsdk";
 import { customDomain, findOrigin } from "./lib/cloudflare.mjs";
+import { walk } from "./lib/walk.mjs";
 
 const UPDATE = resolve(import.meta.dirname, "update.mjs");
 const RELEASE_NOTES = resolve(import.meta.dirname, "release-notes.mjs");
@@ -197,4 +199,21 @@ test("takes the owner's address first, then the custom domain, and only asks for
   assert.equal(await findOrigin(config, ["node", "x", "--origin", "https://mine.example/"]), "https://mine.example");
   assert.equal(await findOrigin(config, ["node", "x"]), "https://bridge.example");
   await assert.rejects(findOrigin(config, ["node", "x", "--origin", "http://mine.example"]), /https/);
+});
+
+test("the walk for Garmin's verification is a valid 10-minute walk ending when asked, with nothing about a person", () => {
+  const endsAt = new Date("2026-11-10T21:15:30.700Z");
+  const decoder = new Decoder(Stream.fromByteArray(walk(endsAt)));
+  assert.ok(decoder.isFIT() && decoder.checkIntegrity());
+  const { messages, errors } = decoder.read();
+  assert.deepEqual(errors, []);
+  const [session] = messages.sessionMesgs;
+  assert.equal(session.sport, "walking");
+  assert.equal(session.totalElapsedTime, 600);
+  assert.equal(session.timestamp.toISOString(), "2026-11-10T21:15:30.000Z");
+  assert.equal(messages.recordMesgs.length, 601);
+  const fields = new Set(Object.values(messages).flat().flatMap((message) => Object.keys(message)));
+  for (const personal of ["positionLat", "positionLong", "heartRate", "serialNumber"]) assert.ok(!fields.has(personal), personal);
+  assert.equal(messages.userProfileMesgs, undefined);
+  assert.notDeepEqual(walk(new Date(endsAt.getTime() + 60_000)), walk(endsAt));
 });

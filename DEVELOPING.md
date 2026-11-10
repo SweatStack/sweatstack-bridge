@@ -62,6 +62,13 @@ which SweatStack ends after 24 hours, and the next consent or permission change 
 SweatStack's signed disconnect is the third: it comes from the Portal or for a deleted user, and the bridge deregisters at
 the platform first, answering `503` and keeping the row if the platform can't be reached, so "try again" is true.
 
+**A sign-in without SweatStack**, for a platform's partner verification, which needs two accounts whose data
+reaches the bridge before any athlete can. `npm run verify` writes a flow through the owner's Cloudflare login,
+and `/start/<platform>/<flow>` sends the browser on to the platform's consent, because only the Worker holds the
+platform's client id. That route leads on only for a flow that exists, isn't used and hasn't expired. The flow's
+relying-party values belong to nobody, so its code can't be redeemed, and SweatStack never names a user for the
+connection. From there it's a connection nobody claims: its pushes wait, and it ends after a day.
+
 [The contract](https://docs.sweatstack.no/learn/applications/self-hosted-integrations/) is the whole of what
 SweatStack expects from it.
 
@@ -80,10 +87,11 @@ src/
   connections.ts      What a connection provides, whose it is, and its access token
   inbox/              The job queue, what runs the jobs, and the cron
   oidc/               The OpenID Provider: discovery, keys, registration, authorize, token
-  flows/              The platform's redirect and webhooks, SweatStack's signed disconnect, what follows a consent
+  flows/              The start of a sign-in without SweatStack, the platform's redirect and webhooks,
+                      SweatStack's signed disconnect, what follows a consent
   providers/          Everything specific to one platform
 migrations/           The D1 schema
-scripts/              The owner's commands: deploy, dev, status, urls, update. Also the release notes
+scripts/              The owner's commands: deploy, dev, status, urls, update, verify. Also the release notes
 test/
   contract/           What SweatStack can see, over HTTP only
   internal/           What it can't see: races, retries, budgets
@@ -126,7 +134,8 @@ Check every change against these.
    end, and every table has a purge.
 6. **Secrets stay out of logs and output.** Logging goes through `src/log.ts`. It never receives a token, a
    platform's file URL or a request URL, because the webhook path holds a secret. Secrets are compared in
-   constant time.
+   constant time. `warn` is for what the owner should look at, and Cloudflare's logs show it as a warning:
+   `sweatstack_not_connected`, `push_waiting_for_user` and `webhook_refused`.
 7. **Migrations only add, run before the code deploys, and are never edited once published.** The running
    version then always works with the next schema, and a database that has already run a migration can't
    miss a change to it. A test holds that.

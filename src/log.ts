@@ -7,3 +7,8 @@ type Field = string | number | boolean | null;
 export function log(event: string, fields: Record<string, Field> = {}): void {
   console.log(JSON.stringify({ event, ...fields }));
 }
+
+/** The same, for what the owner should look at: Cloudflare's logs show it as a warning. */
+export function warn(event: string, fields: Record<string, Field> = {}): void {
+  console.warn(JSON.stringify({ event, ...fields }));
+}
