@@ -3,7 +3,7 @@
 Versions follow [Semantic Versioning](https://semver.org). `npm run update` moves a deployment between
 them.
 
-## Unreleased
+## 0.3.0
 
 - **Wellness:** resting heart rate, sleep duration, HRV, body mass and body fat from Garmin's health summaries, written to SweatStack as the athlete's dailies with `platform` `garmin_connect`, the same values SweatStack's own Garmin connection fills. A later value replaces what the day held, including one the athlete entered. With history on offer, the last 28 days are asked for when an athlete connects. To turn it on, see the runbook's Wellness section: your Garmin app needs the Health API. **If `GARMIN_APP_OFFERS` already names `wellness`, this update turns it on**, and athletes who didn't share their health data are asked to reconnect: before updating, tick write for Wellness on your app's Consent screen tab and set up the four health settings in Garmin's tool. Without `wellness` in `GARMIN_APP_OFFERS`, nothing changes.
 - **Daily values wait in the bridge's database** until they're delivered, for at most 3 days, and nothing else from Garmin's health summaries is kept. Files are still never stored.
