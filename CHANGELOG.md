@@ -3,7 +3,7 @@
 Versions follow [Semantic Versioning](https://semver.org). `npm run update` moves a deployment between
 them.
 
-## Unreleased
+## 0.4.1
 
 - **A file the bridge skips is logged, with the reason:** `file_skipped` with `manual` for an activity entered by hand, which has no file, or `format` for a format the bridge doesn't relay, such as TCX. The warning `file_ping_unreadable` says that Garmin left out a field the bridge needs. Before, the bridge skipped these without a word, and Garmin still heard 200.
 
