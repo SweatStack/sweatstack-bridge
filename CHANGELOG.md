@@ -3,7 +3,7 @@
 Versions follow [Semantic Versioning](https://semver.org). `npm run update` moves a deployment between
 them.
 
-## Unreleased
+## 0.4.0
 
 - **`npm run verify` helps you pass Garmin's partner verification**, before or after you set Garmin to Self-hosted in SweatStack. It makes a Garmin sign-in link that needs no SweatStack, and a walk to import. The runbook's section "Pass Garmin's verification" has the steps. Your app works without the verification.
 - **Warnings in the logs** say why nothing reaches SweatStack: `sweatstack_not_connected` when SweatStack answers that Garmin isn't Self-hosted, with the fix, `push_waiting_for_user` once for each push whose athlete has no user yet, and `webhook_refused` with the reason for each push the bridge refused. Garmin counts each refused push as an error.
