@@ -3,6 +3,10 @@
 Versions follow [Semantic Versioning](https://semver.org). `npm run update` moves a deployment between
 them.
 
+## 0.4.2
+
+- **The npm scripts work on Windows:** `npm run urls`, `dev`, `deploy`, `status` and `verify` couldn't start wrangler there, and `npm run urls` asked you to run `npx wrangler login`, even after you had. When wrangler can't tell which Cloudflare account to use, the scripts now show its own error, and point out that a `CLOUDFLARE_API_TOKEN` takes precedence over `npx wrangler login`.
+
 ## 0.4.1
 
 - **A file the bridge skips is logged, with the reason:** `file_skipped` with `manual` for an activity entered by hand, which has no file, or `format` for a format the bridge doesn't relay, such as TCX. The warning `file_ping_unreadable` says that Garmin left out a field the bridge needs. Before, the bridge skipped these without a word, and Garmin still heard 200.

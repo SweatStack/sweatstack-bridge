@@ -1,6 +1,6 @@
 {
   "name": "sweatstack-bridge",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": true,
   "description": "Connect a wearable platform to your app built on SweatStack, under your own name and on your own keys.",
   "license": "MIT",
