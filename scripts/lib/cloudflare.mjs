@@ -14,8 +14,16 @@ export function customDomain(routes = []) {
 /** The account's workers.dev address, which only Cloudflare knows. */
 async function workersDevOrigin(config) {
   const whoami = wrangler(["whoami", "--json"], { capture: true, check: false });
-  const account = whoami.status === 0 ? JSON.parse(whoami.stdout) : null;
-  if (!account?.loggedIn) throw new CloudflareProblem("Run npx wrangler login first.");
+  if (whoami.status !== 0) {
+    // Not always a missing login: a CLOUDFLARE_API_TOKEN in the environment or a .env file takes
+    // precedence over `wrangler login`, and a bad one fails here. Show what wrangler said.
+    throw new CloudflareProblem(
+      `wrangler couldn't tell which Cloudflare account to use:\n${whoami.stderr}${whoami.stdout}\n` +
+        "If CLOUDFLARE_API_TOKEN is set (in your shell or a .env file), it overrides npx wrangler login: fix or unset it.",
+    );
+  }
+  const account = JSON.parse(whoami.stdout);
+  if (!account.loggedIn) throw new CloudflareProblem("Run npx wrangler login first.");
   const accounts = account.accounts ?? [];
   if (!config.account_id && accounts.length !== 1) {
     throw new CloudflareProblem("This login has more than one Cloudflare account. Set account_id in wrangler.jsonc, or use --origin https://...");

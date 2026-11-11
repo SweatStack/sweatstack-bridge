@@ -1,17 +1,27 @@
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { generateSigningKey } from "./signing-key.mjs";
 
 const NO_DATABASE_YET = /Couldn't find a D1 DB/;
 
+// Wrangler's own entry point, run with this Node. Not through `npx`: on Windows that's npx.cmd,
+// which Node can't start without a shell, and a shell would mangle arguments like SQL queries.
+const packageJson = createRequire(import.meta.url).resolve("wrangler/package.json");
+const WRANGLER = join(dirname(packageJson), "bin", "wrangler.js");
+
 /** Runs wrangler and stops the script if it fails, unless the caller wants to look at the failure. */
 export function wrangler(args, { capture = false, check = true } = {}) {
-  const result = spawnSync("npx", ["wrangler", ...args], {
+  const result = spawnSync(process.execPath, [WRANGLER, ...args], {
     encoding: "utf8",
     stdio: capture ? ["inherit", "pipe", "pipe"] : "inherit",
   });
+  if (result.error) {
+    console.error(`Couldn't start wrangler: ${result.error.message}`);
+    process.exit(1);
+  }
   if (check && result.status !== 0) {
     if (capture) process.stderr.write(result.stderr + result.stdout);
     process.exit(result.status ?? 1);
