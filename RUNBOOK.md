@@ -19,32 +19,32 @@ wearable platform steps here are Garmin's. [DEVELOPING.md](DEVELOPING.md) explai
 If your app already has athletes who use it with Garmin through SweatStack, email [info@sweatstack.no](mailto:info@sweatstack.no) before you deploy. We help you move them, and they keep their history.
 
 - [ ] A [live app on SweatStack](https://docs.sweatstack.no/learn/applications/going-live/) with **write** ticked for Activities under "Data your app uses". Without it, SweatStack refuses every file
-- [ ] [Keys from Garmin's developer program](https://docs.sweatstack.no/learn/integrations/garmin/). Request them early: it's the one step whose timing you don't control
+- [ ] [Keys from Garmin's developer program](https://docs.sweatstack.no/learn/integrations/garmin/). Garmin approves a new app automatically, at once
 - [ ] A Cloudflare account on the [Workers Paid plan](https://developers.cloudflare.com/workers/platform/pricing/): USD 5 a month, which covers a small app. The free plan's CPU limit is too tight for the bridge
 - [ ] You've read [what changes for your users](https://docs.sweatstack.no/learn/applications/self-hosted-integrations/#what-athletes-see-on-your-sign-in-screen). In short: your sign-in page loses its email field, and one person can end up as two users. **Never merge users by email**
 
 ## Deploy
 
-1. [Deploy to Cloudflare](https://deploy.workers.cloudflare.com/?url=https://github.com/SweatStack/sweatstack-bridge). Leave anything you don't have yet empty, and set it in steps 3 to 5.
-2. Clone your copy, then:
+1. [Deploy to Cloudflare](https://deploy.workers.cloudflare.com/?url=https://github.com/SweatStack/sweatstack-bridge). Cloudflare makes a copy of this repository in your GitHub account, and deploys the bridge from it. Every push to that copy deploys again. **GitHub not connected to Cloudflare yet?** Connect it when Cloudflare asks, then click the button above again: only then does it offer to create the repository. Fill in the settings you already have, and leave the rest empty: steps 3 to 5 set them.
+2. Clone the copy that Cloudflare made in your GitHub account to your computer. You change the bridge there, not in this repository. Then, in that folder:
 
    ```sh
    npm ci
-   npx wrangler login
-   npm run status   # what's still missing; no secrets, safe to share
-   npm run urls     # every URL to paste; includes a secret, so keep it private
+   npx wrangler login   # once on this computer; skip it if npx wrangler whoami shows your account
+   npm run status       # what's still missing; no secrets, safe to share
+   npm run urls         # every URL to paste; includes a secret, so keep it private
    ```
 
-3. **In SweatStack's OAuth tab:** create a client secret. Then run `npx wrangler secret put SWEATSTACK_APP_ID`, and the same for `SWEATSTACK_CLIENT_SECRET`.
-4. **In Garmin's developer tools:** [paste the URLs](#set-up-garmins-notifications). Then set `GARMIN_CLIENT_ID` and `GARMIN_CLIENT_SECRET` the same way.
+3. **In SweatStack's OAuth tab:** create a client secret just for the bridge. If you left them empty in step 1, run `npx wrangler secret put SWEATSTACK_CLIENT_ID` and paste the tab's Client ID, then the same for `SWEATSTACK_CLIENT_SECRET`. `npm run status` says which settings are still missing.
+4. **In Garmin's developer tools:** [paste the URLs](#set-up-garmins-notifications). If you left them empty in step 1, set `GARMIN_CLIENT_ID` and `GARMIN_CLIENT_SECRET` the same way.
 5. **In `wrangler.jsonc`:** set `GARMIN_APP_OFFERS` to what your Garmin app is approved for, then commit and push.
-6. **In SweatStack's Data sources tab:** choose "Self-hosted" on the Garmin card and paste the issuer URL.
-7. Run `npm run status`, then [try a sign-in](#try-a-sign-in-again) in a private window.
-8. **At Garmin:** [pass the partner verification](#pass-garmins-verification). Your app works without it: until it passes, Garmin shows your athletes that your app is unverified. You can do it before step 6.
+6. **At Garmin:** [pass the partner verification](#pass-garmins-verification) with `npm run verify`. Do it before step 7, so your athletes never see Garmin say that your app is unverified. Your app works without it, so you can also skip ahead and do it later.
+7. **In SweatStack's Data sources tab:** choose "Self-hosted" on the Garmin card and paste the issuer URL.
+8. Run `npm run status`, then [try a sign-in](#try-a-sign-in-again) in a private window.
 
 Three things to get right from the start:
 
-- **Decide on your address before step 4, so you only paste the URLs once.** Your bridge starts at `https://sweatstack-bridge.<your-subdomain>.workers.dev`, and you can keep it: athletes only pass through it during sign-in. Use your own domain if you want the bridge to stay at one address wherever it runs, or don't want to show your Cloudflare subdomain. The domain has to be on Cloudflare in the same account. Then add `"routes": [{ "pattern": "garmin.example.com", "custom_domain": true }]` to `wrangler.jsonc`. Moving later means repeating steps 4 and 6.
+- **Decide on your address before step 4, so you only paste the URLs once.** Your bridge starts at `https://sweatstack-bridge.<your-subdomain>.workers.dev`, and you can keep it: athletes only pass through it during sign-in. Use your own domain if you want the bridge to stay at one address wherever it runs, or don't want to show your Cloudflare subdomain. The domain has to be on Cloudflare in the same account. Then add `"routes": [{ "pattern": "garmin.example.com", "custom_domain": true }]` to `wrangler.jsonc`. Moving later means repeating steps 4 and 7.
 - **Don't delete the D1 database.** Without it, every athlete has to connect again and comes back as a new user. See [Back up and restore](#back-up-and-restore).
 - **A second bridge in the same Cloudflare account, such as a test setup, needs its own name and database.** A copy with the same `database_name` attaches to the first copy's database, and shares its tokens. The button deploys before you can change that, so don't use it for the second one. Clone this repository, change `name` and `database_name` in `wrangler.jsonc`, then run `npm ci` and `npm run deploy`. Continue from step 2. Where a step says push, run `npm run deploy` again.
 
@@ -54,7 +54,7 @@ Set these with `npx wrangler secret put <name>`. A deploy leaves them alone.
 
 | Name | What |
 |---|---|
-| `SWEATSTACK_APP_ID` | Your app's client id |
+| `SWEATSTACK_CLIENT_ID` | Your app's Client ID, from its OAuth tab in SweatStack. The same value as its Application ID. Before 0.5.0 this was `SWEATSTACK_APP_ID`, which still works |
 | `SWEATSTACK_CLIENT_SECRET` | A client secret just for the bridge, so it rotates separately |
 | `GARMIN_CLIENT_ID` | Your Garmin client id |
 | `GARMIN_CLIENT_SECRET` | Your Garmin client secret |
@@ -226,35 +226,37 @@ data from two Garmin users. You can pass it before you set Garmin to Self-hosted
 connects two Garmin accounts of your own to the bridge, with no SweatStack in between. Nothing has to change after
 it passes.
 
+Run `npm run verify` in your copy. It walks you through the steps below one at a time, and goes on once a step's
+data has reached the bridge. Type q to stop at any step, and run it again to carry on there.
+
 You need:
 
 - **Account A:** your own Garmin account. If your app offers wellness, it needs a Garmin watch that records sleep
-  and HRV status.
+  and HRV status. Without wellness, it needs no watch.
 - **Account B:** a new Garmin account. Make it at https://connect.garmin.com. It is free and needs no watch.
-- **One night** if your app offers wellness, because Garmin must receive sleep and HRV data. Without wellness, it
-  takes about 15 minutes, and you skip steps 3 and 4.
+- **About 15 minutes.** With wellness, one night more, because Garmin must receive sleep and HRV status.
 
 1. [Set up Garmin's notifications](#set-up-garmins-notifications), and the health settings under
    [Wellness](#wellness) if your app offers it.
-2. Run `npm run verify`. Open its link in a private browser window, sign in to Garmin with account A, and allow
-   all permissions. You come back to this page.
-3. With account A, enter a weight in Garmin Connect.
-4. Wear the watch tonight. Tomorrow morning, sync it with the Garmin Connect app.
-5. With account A, import the walk that `npm run verify` made, at https://connect.garmin.com/app/import-data.
-6. Run `npm run verify` again. Connect account B with its new link.
-7. With account B, import the new walk.
-8. With account B, set one permission of your app to off in Garmin Connect, then to on again.
-9. With account B, remove your app in Garmin Connect.
+2. Open the link that `npm run verify` prints in a private browser window. Sign in to Garmin with account A, and
+   allow all permissions. You come back to this page.
+3. With account A, import the walk that `npm run verify` made, at https://connect.garmin.com/app/import-data.
+4. Connect account B with the new link that `npm run verify` prints.
+5. With account B, import the new walk.
+6. With account B, turn off one of your app's permissions in Garmin Connect.
+7. With account B, remove your app in Garmin Connect.
+8. Only with wellness: with account A, enter a weight in Garmin Connect.
+9. Only with wellness: wear the watch tonight. Tomorrow morning, sync it with the Garmin Connect app.
 10. Open Garmin's [partner verification](https://apis.garmin.com/tools/partnerVerification), sign in with your
-    consumer key, and select **Run Tests**. Do it within 24 hours of step 2.
+    consumer key, and select **Run Tests**. Do it within 24 hours of step 2, because Garmin counts the last 24 hours.
+    Without wellness, this is step 8 in `npm run verify`.
 
-You can run Garmin's tests at any time: a setting without data shows which step is still missing. Steps 5 to 9
-can be in the evening or in the morning, because Garmin counts the last 24 hours.
+You can run Garmin's tests at any time: a setting without data shows which step is still missing.
 
 - **The bridge ends each of these connections a day after its consent**, at Garmin too, because no SweatStack user
-  claims it. To try again later, start at step 2.
-- **If you come back to this page with `error=` in the address**, Garmin didn't connect the account. Run
-  `npm run verify` for a new link.
+  claims it. `npm run verify` then starts again at step 2 by itself.
+- **If you come back to this page with `error=` in the address**, Garmin didn't connect the account.
+  `npm run verify` prints a new link. If Garmin shows an error page instead, type n for a new link.
 - **If account A is already connected to your app**, the sign-in reconnects it, and the walk arrives as your
   activity.
 - **Until you set Garmin to Self-hosted**, `npm run status` counts these accounts as waiting for a user and shows
@@ -264,8 +266,8 @@ can be in the evening or in the morning, because Garmin counts the last 24 hours
 | Garmin's test | What passes it |
 |---|---|
 | "A deregistration endpoint, a user permissions change endpoint, and at least 1 other endpoint must be enabled." | Step 1 |
-| "N enabled summary domain(s) without data in the last 24 hours." | Each setting you enabled gets data from a step, by the name Garmin's test shows: `ACTIVITY_FILE_DATA` from step 5, `WELLNESS_BODY_COMP` from step 3, `WELLNESS_DAILY`, `WELLNESS_SLEEP` and `HRV` from step 4, `CONSUMER_PERMISSIONS` from step 8, `USER_DEREG` from step 9 |
-| "N user(s) with data uploaded in the last 24 hours. 2 required." | Steps 5 and 7 |
+| "N enabled summary domain(s) without data in the last 24 hours." | Each setting you enabled gets data from a step, by the name Garmin's test shows: `ACTIVITY_FILE_DATA` from steps 3 and 5, `CONSUMER_PERMISSIONS` from step 6, `USER_DEREG` from step 7, `WELLNESS_BODY_COMP` from step 8, `WELLNESS_DAILY`, `WELLNESS_SLEEP` and `HRV` from step 9 |
+| "N user(s) with data uploaded in the last 24 hours. 2 required." | Steps 3 and 5 |
 | "N http error(s) in the last 24 hours." | The bridge answered every push. If it refused one, `npx wrangler tail` shows `webhook_refused` with the reason. `unknown_secret`: paste the URLs that `npm run urls` prints again. `unknown_kind`: disable that setting at Garmin. `invalid_body`: report it. Garmin counts an error for 24 hours |
 
 ## Fix a missing Disconnect button

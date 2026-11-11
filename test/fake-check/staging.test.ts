@@ -10,7 +10,7 @@ const required = (name: string): string => {
 
 checks("a real SweatStack", () => ({
   url: required("SWEATSTACK_URL").replace(/\/$/, ""),
-  appId: required("SWEATSTACK_APP_ID"),
+  appId: required("SWEATSTACK_CLIENT_ID"),
   clientSecret: required("SWEATSTACK_CLIENT_SECRET"),
   fetch: (input, init) => fetch(input, init),
 }));

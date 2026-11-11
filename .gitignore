@@ -7,6 +7,8 @@ node_modules/
 .DS_Store
 # The walk that `npm run verify` makes for Garmin's verification, new on each run.
 verification-walk.fit
+# Where `npm run verify` is, so it carries on there.
+.verification.json
 # Internal planning notes. They discuss matters that aren't settled in public.
 plans/
 tail.jsonl

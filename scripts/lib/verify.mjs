@@ -36,6 +36,7 @@ export function verificationSignIn({ now }) {
   };
   const values = Object.values(row).map((value) => (typeof value === "number" ? String(value) : `'${value.replaceAll("'", "''")}'`));
   return {
+    id,
     sql: `INSERT INTO flows (${Object.keys(row).join(", ")}) VALUES (${values.join(", ")})`,
     path: `/start/${PROVIDER}/${id}`,
     expiresAt,

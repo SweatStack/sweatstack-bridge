@@ -27,6 +27,9 @@ const FIXES = {
   "declare:sweatstack_409": "Set Garmin to Self-hosted, with your issuer URL, on your app's Data sources tab in SweatStack.",
 };
 
+/** Secrets that had another name before, by their name now. The same as RENAMED_FROM in src/config.ts. */
+export const RENAMED_FROM = { SWEATSTACK_CLIENT_ID: "SWEATSTACK_APP_ID" };
+
 function when(seconds) {
   return `${new Date(seconds * 1000).toISOString().slice(0, 16).replace("T", " ")} UTC`;
 }
@@ -39,19 +42,27 @@ function plural(count, one, many = `${one}s`) {
  * The settings with no value. `secretNames` is null while they can't be read: the Worker has no deploy yet.
  */
 export function missingSettings({ requiredSecrets, secretNames, vars }) {
+  const has = (name) => secretNames.includes(name);
   return {
-    secrets: secretNames === null ? null : requiredSecrets.filter((name) => !secretNames.includes(name)),
+    secrets: secretNames === null ? null : requiredSecrets.filter((name) => !has(name) && !has(RENAMED_FROM[name])),
     vars: ["SWEATSTACK_URL", "GARMIN_APP_OFFERS"].filter((name) => !vars?.[name]),
+    renamed: secretNames === null ? [] : requiredSecrets.filter((name) => !has(name) && has(RENAMED_FROM[name])),
   };
 }
 
-function settingsLines({ secrets, vars }) {
+function settingsLines({ secrets, vars, renamed = [] }) {
   if (secrets === null) return ["Settings:    can't be read until the first deploy"];
-  if (secrets.length === 0 && vars.length === 0) return ["Settings:    all set"];
+  // Nothing to do yet: the old name still works. Said so the owner can move over when it suits them.
+  const renames = renamed.flatMap((name) => [
+    `  ${RENAMED_FROM[name]} is now called ${name}. The old name still works. To move over:`,
+    `    npx wrangler secret put ${name}, with the same value, then npx wrangler secret delete ${RENAMED_FROM[name]}`,
+  ]);
+  if (secrets.length === 0 && vars.length === 0) return ["Settings:    all set", ...renames];
   return [
     "Settings:    missing",
     ...secrets.map((name) => `  ${name}: npx wrangler secret put ${name}`),
     ...vars.map((name) => `  ${name}: set it under vars in wrangler.jsonc`),
+    ...renames,
   ];
 }
 

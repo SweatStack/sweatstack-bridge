@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { missingSettings, STATUS_QUERIES, statusReport } from "../../scripts/lib/status.mjs";
+import { missingSettings, RENAMED_FROM, STATUS_QUERIES, statusReport } from "../../scripts/lib/status.mjs";
+import { RENAMED_FROM as RENAMED_IN_WORKER } from "../../src/config";
 import { ALL_PERMISSIONS, resetDatabase, world, type Client } from "../support/world";
 
 const kari = { userId: "garmin-kari", permissions: ALL_PERMISSIONS };
@@ -150,10 +151,24 @@ describe("the rest of the report", () => {
 
   it("names each missing setting, with how to set it", () => {
     const settings = missingSettings({ requiredSecrets: ["A_SECRET", "B_SECRET"], secretNames: ["A_SECRET"], vars: { SWEATSTACK_URL: "https://x" } });
-    expect(settings).toEqual({ secrets: ["B_SECRET"], vars: ["GARMIN_APP_OFFERS"] });
+    expect(settings).toEqual({ secrets: ["B_SECRET"], vars: ["GARMIN_APP_OFFERS"], renamed: [] });
     const text = statusReport({ ...facts, settings, database: null, databaseProblem: "x" });
     expect(text).toContain("B_SECRET: npx wrangler secret put B_SECRET");
     expect(text).toContain("GARMIN_APP_OFFERS: set it under vars in wrangler.jsonc");
+  });
+
+  it("counts SWEATSTACK_APP_ID as the client id, and says how to move to the new name", () => {
+    const vars = { SWEATSTACK_URL: "https://x", GARMIN_APP_OFFERS: "activities" };
+    const settings = missingSettings({ requiredSecrets: ["SWEATSTACK_CLIENT_ID"], secretNames: ["SWEATSTACK_APP_ID"], vars });
+    expect(settings).toEqual({ secrets: [], vars: [], renamed: ["SWEATSTACK_CLIENT_ID"] });
+    const text = statusReport({ ...facts, settings, database: null, databaseProblem: "x" });
+    expect(text).toContain("Settings:    all set");
+    expect(text).toContain("SWEATSTACK_APP_ID is now called SWEATSTACK_CLIENT_ID. The old name still works.");
+    expect(text).toContain("npx wrangler secret put SWEATSTACK_CLIENT_ID, with the same value, then npx wrangler secret delete SWEATSTACK_APP_ID");
+  });
+
+  it("knows the same renamed settings as the Worker", () => {
+    expect(RENAMED_FROM).toEqual(RENAMED_IN_WORKER);
   });
 
   it("can't name missing secrets before the first deploy", () => {

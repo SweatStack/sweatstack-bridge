@@ -3,6 +3,12 @@
 Versions follow [Semantic Versioning](https://semver.org). `npm run update` moves a deployment between
 them.
 
+## Unreleased
+
+- **`npm run verify` walks you through Garmin's partner verification**, one step at a time, and goes on once each step's data has reached the bridge. Without wellness, that's two accounts, a walk each, one permission taken back and one removal: about 15 minutes, and no watch. With wellness, a weight and a night follow. Type q to stop at any step, such as for the night, and run it again to carry on there. The runbook now puts the verification before you set Garmin to Self-hosted in SweatStack, so your athletes never see your app as unverified.
+- **`SWEATSTACK_APP_ID` is now `SWEATSTACK_CLIENT_ID`**, the name SweatStack's OAuth tab gives it. The old name still works, so nothing breaks. `npm run status` says how to move over: `npx wrangler secret put SWEATSTACK_CLIENT_ID` with the same value, then `npx wrangler secret delete SWEATSTACK_APP_ID`.
+- **The runbook's Deploy steps are clearer** about the GitHub copy that Cloudflare makes, settings you already filled in, and `npx wrangler login`.
+
 ## 0.4.2
 
 - **The npm scripts work on Windows:** `npm run urls`, `dev`, `deploy`, `status` and `verify` couldn't start wrangler there, and `npm run urls` asked you to run `npx wrangler login`, even after you had. When wrangler can't tell which Cloudflare account to use, the scripts now show its own error, and point out that a `CLOUDFLARE_API_TOKEN` takes precedence over `npx wrangler login`.

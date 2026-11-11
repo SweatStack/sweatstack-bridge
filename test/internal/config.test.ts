@@ -3,7 +3,7 @@ import { readConfig, type Env } from "../../src/config";
 
 const COMPLETE_SETTINGS = {
   SWEATSTACK_URL: "https://sweatstack.test",
-  SWEATSTACK_APP_ID: "test-app",
+  SWEATSTACK_CLIENT_ID: "test-app",
   SWEATSTACK_CLIENT_SECRET: "test-client-secret",
   GARMIN_CLIENT_ID: "test-garmin-id",
   GARMIN_CLIENT_SECRET: "test-garmin-secret",
@@ -27,16 +27,22 @@ describe("readConfig", () => {
   });
 
   it("reports everything that's missing at once, and the deploy form's empty strings count", () => {
-    const result = read({ SWEATSTACK_URL: "https://sweatstack.test", SWEATSTACK_APP_ID: "  " });
+    const result = read({ SWEATSTACK_URL: "https://sweatstack.test", SWEATSTACK_CLIENT_ID: "  " });
     expect(result).toEqual({
       ok: false,
       problems: [
-        "SWEATSTACK_APP_ID is not set",
+        "SWEATSTACK_CLIENT_ID is not set",
         "SWEATSTACK_CLIENT_SECRET is not set",
         "GARMIN_CLIENT_ID is not set",
         "GARMIN_CLIENT_SECRET is not set",
       ],
     });
+  });
+
+  it("still reads SWEATSTACK_APP_ID, the client id's name before 0.5.0, and prefers the new name", () => {
+    const { SWEATSTACK_CLIENT_ID: _, ...withoutClientId } = COMPLETE_SETTINGS;
+    expect(read({ ...withoutClientId, SWEATSTACK_APP_ID: "old-name" })).toMatchObject({ ok: true, config: { appId: "old-name" } });
+    expect(read({ ...COMPLETE_SETTINGS, SWEATSTACK_APP_ID: "old-name" })).toMatchObject({ ok: true, config: { appId: "test-app" } });
   });
 
   it("refuses to send tokens over plain http, except to localhost", () => {

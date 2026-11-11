@@ -59,7 +59,7 @@ export function world({ sweatstack: sweatstackOptions, settings: extraSettings, 
   const garmin = sharedGarmin ?? new FakeGarmin();
   const settings = {
     SWEATSTACK_URL: sweatstack.url,
-    SWEATSTACK_APP_ID: sweatstack.appId,
+    SWEATSTACK_CLIENT_ID: sweatstack.appId,
     SWEATSTACK_CLIENT_SECRET: sweatstack.clientSecret,
     GARMIN_CLIENT_ID: garmin.clientId,
     GARMIN_CLIENT_SECRET: garmin.clientSecret,

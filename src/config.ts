@@ -17,6 +17,9 @@ export type ConfigResult =
 
 const DEFAULT_BACKFILL_DAYS = 90;
 
+/** Settings that had another name before, by their name now. SweatStack's OAuth tab calls this one Client ID. */
+export const RENAMED_FROM = { SWEATSTACK_CLIENT_ID: "SWEATSTACK_APP_ID" } as const;
+
 /**
  * Reads the settings, reporting every problem at once. The first deploy happens before the owner has
  * their keys, so an incomplete configuration is a normal state and not an error.
@@ -24,14 +27,16 @@ const DEFAULT_BACKFILL_DAYS = 90;
 export function readConfig(env: Env, provider: { requiredSettings: readonly string[]; settingProblems?: () => string[] }): ConfigResult {
   const problems: string[] = [];
 
+  // A setting that was renamed is still read under its old name, so a bridge set up before keeps working.
   const required = (name: string): string => {
-    const value = setting(env, name);
+    const oldName: string | undefined = Object.hasOwn(RENAMED_FROM, name) ? RENAMED_FROM[name as keyof typeof RENAMED_FROM] : undefined;
+    const value = setting(env, name) ?? (oldName === undefined ? undefined : setting(env, oldName));
     if (value === undefined) problems.push(`${name} is not set`);
     return value ?? "";
   };
 
   const sweatstackUrl = parseSweatStackUrl(required("SWEATSTACK_URL"), problems);
-  const appId = required("SWEATSTACK_APP_ID");
+  const appId = required("SWEATSTACK_CLIENT_ID");
   const clientSecret = required("SWEATSTACK_CLIENT_SECRET");
   provider.requiredSettings.forEach(required);
   const backfillDays = parseBackfillDays(setting(env, "BACKFILL_DAYS"), problems);

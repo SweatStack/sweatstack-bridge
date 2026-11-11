@@ -13,10 +13,10 @@ const packageJson = createRequire(import.meta.url).resolve("wrangler/package.jso
 const WRANGLER = join(dirname(packageJson), "bin", "wrangler.js");
 
 /** Runs wrangler and stops the script if it fails, unless the caller wants to look at the failure. */
-export function wrangler(args, { capture = false, check = true } = {}) {
+export function wrangler(args, { capture = false, check = true, stdin = "inherit" } = {}) {
   const result = spawnSync(process.execPath, [WRANGLER, ...args], {
     encoding: "utf8",
-    stdio: capture ? ["inherit", "pipe", "pipe"] : "inherit",
+    stdio: capture ? [stdin, "pipe", "pipe"] : [stdin, "inherit", "inherit"],
   });
   if (result.error) {
     console.error(`Couldn't start wrangler: ${result.error.message}`);

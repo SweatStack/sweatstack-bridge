@@ -169,7 +169,7 @@ Activities and Wellness and its Garmin card set to Self-hosted. Without Wellness
 found by the reference `bridge-fake-check`:
 
 ```sh
-SWEATSTACK_URL=... SWEATSTACK_APP_ID=... SWEATSTACK_CLIENT_SECRET=... npm run test:staging
+SWEATSTACK_URL=... SWEATSTACK_CLIENT_ID=... SWEATSTACK_CLIENT_SECRET=... npm run test:staging
 ```
 
 ## Updating a copy

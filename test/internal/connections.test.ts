@@ -122,7 +122,7 @@ describe("when a request fails", () => {
   const failing = (message: string) => {
     const bridgeEnv = {
       SWEATSTACK_URL: "https://sweatstack.test",
-      SWEATSTACK_APP_ID: "app",
+      SWEATSTACK_CLIENT_ID: "app",
       SWEATSTACK_CLIENT_SECRET: "secret",
       GARMIN_CLIENT_ID: "id",
       GARMIN_CLIENT_SECRET: "secret",

@@ -25,8 +25,8 @@
       "SWEATSTACK_URL": {
         "description": "Where SweatStack runs. Leave as is unless you're pointed at staging."
       },
-      "SWEATSTACK_APP_ID": {
-        "description": "Your app's client id, from the OAuth tab of your app in SweatStack. You can leave this empty for now."
+      "SWEATSTACK_CLIENT_ID": {
+        "description": "Your app's Client ID, from the OAuth tab of your app in SweatStack. You can leave this empty for now."
       },
       "GARMIN_CLIENT_ID": {
         "description": "Your client id from Garmin's developer program. You can leave this empty for now."
