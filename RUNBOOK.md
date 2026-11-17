@@ -194,7 +194,7 @@ npx wrangler d1 execute sweatstack-bridge --remote --command "SELECT kind, attem
 
 If an activity gives no row, run `npx wrangler tail` and sync it again. The bridge logs why it skipped the file:
 
-- `file_skipped` with `manual`: the activity was entered by hand, so it has no file.
+- `file_skipped` with `manual`: Garmin sent an activity that no device recorded, without a file. Garmin does send a file for an activity entered by hand or imported into Garmin Connect, so those are relayed. One entered by hand has no activity data in it, and SweatStack records its upload as failed with `no_data`.
 - `file_skipped` with `format`: Garmin has the activity in a format the bridge doesn't relay, such as `TCX`.
 - The warning `file_ping_unreadable`: Garmin left out a field the bridge needs. Report it.
 

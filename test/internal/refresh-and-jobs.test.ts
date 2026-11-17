@@ -290,7 +290,7 @@ describe("a file the bridge skips says why", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it.each([
-    ["an activity entered by hand, which has no file", { manual: true, fileType: undefined }, { reason: "manual" }],
+    ["a manual activity without a file", { manual: true, fileType: undefined, callbackURL: undefined }, { reason: "manual" }],
     ["a format the relay doesn't take", { fileType: "TCX" }, { reason: "format", format: "TCX" }],
   ])("logs %s", async (_name, overrides, fields) => {
     await w.ping(w.garmin.fileReady(kari, "1001", overrides));

@@ -282,8 +282,10 @@ export function garmin(deps: Pick<Deps, "env" | "fetch" | "now">): Provider {
       // Garmin hears 200 whatever is skipped here, so each skip is logged: an owner who imported a file and
       // sees nothing in SweatStack reads why. Garmin's own account id is never logged.
       return (pings as ActivityFilePing[]).flatMap((ping) => {
-        // A manual activity has no file.
-        if (ping.manual === true) {
+        // Garmin marks an activity manual when no device recorded it, entered by hand or imported, and sends a file
+        // for both: one entered by hand has no activity data in it, which SweatStack says. Only a ping without an
+        // address has nothing to download.
+        if (ping.manual === true && typeof ping.callbackURL !== "string") {
           log("file_skipped", { provider: GARMIN_NAME, reason: "manual" });
           return [];
         }

@@ -3,6 +3,10 @@
 Versions follow [Semantic Versioning](https://semver.org). `npm run update` moves a deployment between
 them.
 
+## Unreleased
+
+- **Activities an athlete imports into Garmin Connect reach SweatStack**, such as a FIT file from another device or app. Garmin marks an activity manual when no device recorded it, and the bridge skipped all of these as having no file. It now relays each one that comes with a file. An activity entered by hand comes with one too, but with no activity data in it, so SweatStack records that upload as failed with `no_data`. This also lets step 3 of `npm run verify` finish once the walk is imported: before, it waited until you typed s.
+
 ## 0.5.0
 
 - **`npm run verify` walks you through Garmin's partner verification**, one step at a time, and goes on once each step's data has reached the bridge. Without wellness, that's two accounts, a walk each, one permission taken back and one removal: about 15 minutes, and no watch. With wellness, a weight and a night follow. Type q to stop at any step, such as for the night, and run it again to carry on there. The runbook now puts the verification before you set Garmin to Self-hosted in SweatStack, so your athletes never see your app as unverified.

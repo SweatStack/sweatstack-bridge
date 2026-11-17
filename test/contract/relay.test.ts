@@ -51,9 +51,14 @@ describe("relaying a file", () => {
     expect(w.sweatstack.uploads).toHaveLength(1);
   });
 
+  it("relays a file the athlete imported, which the platform marks manual", async () => {
+    await w.ping(w.garmin.fileReady(kari, "1001", { manual: true }));
+    expect(w.sweatstack.uploads.map((upload) => upload.externalId)).toEqual(["1001"]);
+  });
+
   it.each([
     ["a format the relay doesn't take", { fileType: "TCX" }],
-    ["a manual activity, which has no file", { manual: true }],
+    ["a manual activity without a file", { manual: true, callbackURL: undefined }],
   ])("skips %s", async (_name, overrides) => {
     await w.ping(w.garmin.fileReady(kari, "1001", overrides));
     expect(w.garmin.downloads).toEqual([]);
