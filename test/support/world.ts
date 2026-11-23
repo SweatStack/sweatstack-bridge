@@ -147,7 +147,7 @@ export function world({ sweatstack: sweatstackOptions, settings: extraSettings, 
     while (background.length > 0) await Promise.all(background.splice(0));
   };
 
-  /** Garmin posting to a webhook. The path comes from `npm run urls` in real life. */
+  /** Garmin posting to a webhook. The path comes from the console in real life. */
   const webhook = async (kind: string, body: unknown, { secret }: { secret?: string } = {}) => {
     const stored = await env.DB.prepare("SELECT value FROM meta WHERE key = 'webhook_secret'").first<{ value: string }>();
     return request(`/${PROVIDER}/${secret ?? stored?.value}/${kind}`, {

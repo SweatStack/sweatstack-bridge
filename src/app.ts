@@ -22,7 +22,7 @@ const README_URL = "https://github.com/SweatStack/sweatstack-bridge";
 export function createApp(deps: Deps): Hono {
   const app = new Hono();
 
-  app.get("/", (c) => c.text(`A SweatStack bridge. See ${README_URL}\n`));
+  app.get("/", (c) => c.text(`A SweatStack bridge. Its owner signs in at /console. See ${README_URL}\n`));
 
   // Before the platform routes, whose webhook route would otherwise match a console path.
   app.route("/console", consoleRoutes(deps));
@@ -59,7 +59,7 @@ export function createApp(deps: Deps): Hono {
 
 /**
  * Answers for a platform that doesn't exist or isn't set up yet, and gives the routes what they need. A
- * public route never says which setting is missing: `npm run status` tells the owner.
+ * public route never says which setting is missing: the console tells the owner.
  */
 function servesPlatform(deps: Deps): MiddlewareHandler<{ Variables: PlatformVariables }> {
   return async (c, next) => {

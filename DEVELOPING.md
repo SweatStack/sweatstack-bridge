@@ -16,6 +16,10 @@ things that share only a user id:
   the bridge keeps those values, and nothing else from the push, until it has written them as the athlete. A
   cron trigger every minute handles retries.
 
+The owner's side is a **console** at `/console`: the setup steps, each with the values to paste, and then the
+status. It's server-rendered, signed into with the bridge's SweatStack client secret, and only reads, apart from
+the bridge's own records of what it has seen. See [The console](#the-console).
+
 ### The job queue
 
 Everything that can fail is a job in the `inbox` table, so it all gets the same retries: backing off to an
@@ -89,9 +93,11 @@ src/
   oidc/               The OpenID Provider: discovery, keys, registration, authorize, token
   flows/              The start of a sign-in without SweatStack, the platform's redirect and webhooks,
                       SweatStack's signed disconnect, what follows a consent
-  providers/          Everything specific to one platform
+  providers/          Everything specific to one platform, including its guide for the console
+  console/            The owner's console: sign-in, the facts it reads, the steps and status they prove, the pages
+public/console/       The console's stylesheet, script and icon, served as Workers static assets
 migrations/           The D1 schema
-scripts/              The owner's commands: deploy, dev, status, urls, update, verify. Also the release notes
+scripts/              The owner's commands: deploy, dev, update, verify. Also the release notes
 test/
   contract/           What SweatStack can see, over HTTP only
   internal/           What it can't see: races, retries, budgets
@@ -143,6 +149,23 @@ Check every change against these.
 
 Core code never names a platform. Everything specific to one lives in `src/providers/`, and a test holds that.
 
+## The console
+
+- **Signing in is the bridge's SweatStack client secret.** Whoever holds it can already do everything to the
+  app, so the console adds no authority, and needs nothing from SweatStack. The session is a 12-hour cookie
+  with a MAC under a key derived from that secret, so there's no session to store, and a rotated secret ends
+  every session.
+- **Every state comes from what the bridge has seen,** never from the owner saying so. `facts.ts` reads
+  everything in one place, and the pages are pure functions of the facts. A step is proven by a sign-in that
+  completed, a push that arrived (`seen:` keys in `meta`, written only for accepted pushes), or SweatStack
+  registering.
+- **It works with any configuration, including none,** because the first deploy often lacks a setting. It's
+  mounted before the platform routes and reads each setting on its own.
+- **It works without JavaScript, and runs no inline script or style.** Every answer is `no-store`, with a CSP
+  that allows only `public/console/`, and every `POST` must come from the bridge's own origin.
+- **The platform's words come from its provider's guide** (`PlatformGuide`), so the console renders any
+  platform without naming one.
+
 ## Limits
 
 The bridge needs Cloudflare's Workers Paid plan: 30 seconds of CPU per request by default, and 10,000
@@ -189,4 +212,4 @@ For this repository only: a copy has no reason to tag.
 3. Commit, then `git tag v1.2.3 && git push origin main v1.2.3`. The Release workflow publishes that section, and
    refuses a tag that doesn't match `package.json` or has no section.
 
-Pushing to `main` changes nothing for anyone: only a tag is noticed, and then only by `npm run status`.
+Pushing to `main` changes nothing for anyone: only a tag is noticed, and then only by the console.

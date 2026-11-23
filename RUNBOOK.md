@@ -25,32 +25,28 @@ If your app already has athletes who use it with Garmin through SweatStack, emai
 
 ## Deploy
 
-1. [Deploy to Cloudflare](https://deploy.workers.cloudflare.com/?url=https://github.com/SweatStack/sweatstack-bridge). Cloudflare makes a copy of this repository in your GitHub account, and deploys the bridge from it. Every push to that copy deploys again. **GitHub not connected to Cloudflare yet?** Connect it when Cloudflare asks, then click the button above again: only then does it offer to create the repository. Fill in the settings you already have, and leave the rest empty: steps 3 to 5 set them.
-2. Clone the copy that Cloudflare made in your GitHub account to your computer. You change the bridge there, not in this repository. Then, in that folder:
+About 15 minutes, or 30 with Garmin's verification. You need no terminal.
 
-   ```sh
-   npm ci
-   npx wrangler login   # once on this computer; skip it if npx wrangler whoami shows your account
-   npm run status       # what's still missing; no secrets, safe to share
-   npm run urls         # every URL to paste; includes a secret, so keep it private
-   ```
+1. **In SweatStack, on your app's OAuth tab:** create a client secret just for the bridge, so it rotates separately. Save it in your password manager: you paste it twice.
+2. [Deploy to Cloudflare](https://deploy.workers.cloudflare.com/?url=https://github.com/SweatStack/sweatstack-bridge). Cloudflare makes a copy of this repository in your GitHub account, and deploys the bridge from it. Every push to that copy deploys again. **GitHub not connected to Cloudflare yet?** Connect it when Cloudflare asks, then click the button above again: only then does it offer to create the repository. Paste your app's Client ID and the secret from step 1, your Garmin client id and secret, and set `GARMIN_APP_OFFERS` to what your Garmin app is approved for. A field you leave empty can be added later, in the Worker's settings in Cloudflare, with no new deploy.
+3. **Open your bridge's console**, at its address with `/console` at the end, such as `https://sweatstack-bridge.<your-subdomain>.workers.dev/console`. Sign in with the client secret from step 1.
+4. **Do the four steps the console lists.** Each happens in one place, gives you the exact values to paste, and ticks itself off when the bridge sees it working:
+   1. Connect your Garmin app, in Garmin's developer portal.
+   2. Turn on Garmin's notifications, in Garmin's endpoint configuration. See [Set up Garmin's notifications](#set-up-garmins-notifications).
+   3. Pass Garmin's verification, which is optional. See [Pass Garmin's verification](#pass-garmins-verification). Do it before step 4, so your athletes never see Garmin say that your app is unverified.
+   4. Switch SweatStack to your bridge, on your app's Data sources tab. Then [try a sign-in](#try-a-sign-in-again) in a private window.
 
-3. **In SweatStack's OAuth tab:** create a client secret just for the bridge. If you left them empty in step 1, run `npx wrangler secret put SWEATSTACK_CLIENT_ID` and paste the tab's Client ID, then the same for `SWEATSTACK_CLIENT_SECRET`. `npm run status` says which settings are still missing.
-4. **In Garmin's developer tools:** [paste the URLs](#set-up-garmins-notifications). If you left them empty in step 1, set `GARMIN_CLIENT_ID` and `GARMIN_CLIENT_SECRET` the same way.
-5. **In `wrangler.jsonc`:** set `GARMIN_APP_OFFERS` to what your Garmin app is approved for, then commit and push.
-6. **At Garmin:** [pass the partner verification](#pass-garmins-verification) with `npm run verify`. Do it before step 7, so your athletes never see Garmin say that your app is unverified. Your app works without it, so you can also skip ahead and do it later.
-7. **In SweatStack's Data sources tab:** choose "Self-hosted" on the Garmin card and paste the issuer URL.
-8. Run `npm run status`, then [try a sign-in](#try-a-sign-in-again) in a private window.
+Once the steps are done, the console is where you [check on your bridge](#run-it).
 
 Three things to get right from the start:
 
-- **Decide on your address before step 4, so you only paste the URLs once.** Your bridge starts at `https://sweatstack-bridge.<your-subdomain>.workers.dev`, and you can keep it: athletes only pass through it during sign-in. Use your own domain if you want the bridge to stay at one address wherever it runs, or don't want to show your Cloudflare subdomain. The domain has to be on Cloudflare in the same account. Then add `"routes": [{ "pattern": "garmin.example.com", "custom_domain": true }]` to `wrangler.jsonc`. Moving later means repeating steps 4 and 7.
+- **Decide on your address before you paste the console's URLs, so you only paste them once.** Your bridge starts at `https://sweatstack-bridge.<your-subdomain>.workers.dev`, and you can keep it: athletes only pass through it during sign-in. Use your own domain if you want the bridge to stay at one address wherever it runs, or don't want to show your Cloudflare subdomain. The domain has to be on Cloudflare in the same account. Then add `"routes": [{ "pattern": "garmin.example.com", "custom_domain": true }]` to `wrangler.jsonc`. Moving later means repeating the console's steps 1, 2 and 4.
 - **Don't delete the D1 database.** Without it, every athlete has to connect again and comes back as a new user. See [Back up and restore](#back-up-and-restore).
-- **A second bridge in the same Cloudflare account, such as a test setup, needs its own name and database.** A copy with the same `database_name` attaches to the first copy's database, and shares its tokens. The button deploys before you can change that, so don't use it for the second one. Clone this repository, change `name` and `database_name` in `wrangler.jsonc`, then run `npm ci` and `npm run deploy`. Continue from step 2. Where a step says push, run `npm run deploy` again.
+- **A second bridge in the same Cloudflare account, such as a test setup, needs its own name and database.** A copy with the same `database_name` attaches to the first copy's database, and shares its tokens. The button deploys before you can change that, so don't use it for the second one. Clone this repository, change `name` and `database_name` in `wrangler.jsonc`, then run `npm ci` and `npm run deploy`. Set its secrets with `npx wrangler secret put <name>`, and continue from step 3. Where a step says push, run `npm run deploy` again.
 
 ## Settings
 
-Set these with `npx wrangler secret put <name>`. A deploy leaves them alone.
+Add these in the Worker's settings in Cloudflare, under Variables and Secrets, or with `npx wrangler secret put <name>`. A deploy leaves them alone, and a new one takes effect without a deploy.
 
 | Name | What |
 |---|---|
@@ -69,17 +65,13 @@ Change these in `wrangler.jsonc` in your copy, not in the Cloudflare dashboard, 
 
 ## Run it
 
-Nobody at SweatStack monitors your bridge, so this is yours to check.
+Nobody at SweatStack monitors your bridge, so this is yours to check. Open your bridge's console, at its
+address with `/console` at the end. It shows what's missing, when Garmin last sent to each URL, how many
+athletes are connected, which jobs are waiting or failed with the fix where there's one, and when a release
+is out. It never shows a client secret or anything about an athlete. More detail is in the Worker's logs in
+Cloudflare, or in `npx wrangler tail`.
 
-```sh
-npm run status
-```
-
-It shows your version, what's missing, whether your bridge and SweatStack answer, how many athletes are connected,
-and which jobs are waiting or failed, with the fix where there's one. It prints no secrets, so it's safe to share.
-More detail is in `npx wrangler tail`.
-
-When it says a release is available:
+When the console says a release is available, in your copy:
 
 ```sh
 npm run update            # to the latest release
@@ -116,7 +108,7 @@ npx wrangler d1 time-travel restore sweatstack-bridge --timestamp 2026-11-09T10:
 
 It asks to confirm, then prints a bookmark that undoes the restore. Everything written after that moment
 is gone: athletes who connected since connect again, and files the platform announced since aren't
-relayed. Check with `npm run status` afterwards.
+relayed. Check the console afterwards.
 
 ### Keep a copy as a file
 
@@ -147,18 +139,11 @@ Garmin tells the bridge about new files, changed permissions and removed connect
 Garmin only calls the URLs you've set for your consumer key. Nothing warns you if you haven't, because sign-in
 works without them.
 
-Run this in your copy:
-
-```sh
-npm run urls
-```
-
-It prints every URL to paste and where it goes, and checks the bridge answers on each one. The webhook URLs hold
-a secret, so keep the output private. It finds your bridge's address through Cloudflare.
-`npm run urls -- --origin https://your-bridge` overrides that.
+Step 2 of your bridge's console lists every URL to paste, with when Garmin last sent to it. The URLs hold a
+secret, so keep them private.
 
 Open [Garmin's endpoint configuration](https://apis.garmin.com/tools/endpoints) and sign in with the consumer
-key and secret. Enable these three settings, with the URLs from the command:
+key and secret. Enable these three settings, with the URLs from the console:
 
 - ACTIVITY - Activity Files
 - COMMON - Deregistrations
@@ -174,7 +159,7 @@ Garmin allows one URL per setting, so any other server you had on these settings
 | Activity Files | New activities and history never arrive, because Garmin announces both through this setting. A sign-in still works |
 | User Permissions Change | When an athlete changes what they share, the status and the Portal stay out of date, and history doesn't start when they allow it later |
 | Deregistrations | When an athlete removes your app in Garmin Connect, the connection stays. It only shows as needing a reconnect once the bridge next fails to use its token |
-| A health setting | No dailies of that kind arrive. `npm run status` says "Last wellness: none on record" while none have |
+| A health setting | No dailies of that kind arrive. The console says nothing has come to that URL |
 
 The bridge can't know about anything that happened before the URL was set. To correct a connection from that
 time, have the athlete sign in again.
@@ -205,8 +190,8 @@ dailies, the same values SweatStack's own Garmin connection fills. It needs your
 
 1. Add `wellness` to `GARMIN_APP_OFFERS` in `wrangler.jsonc`, then commit and push.
 2. On your app's Consent screen tab in SweatStack, tick write for Wellness under Data your app uses.
-3. Run `npm run urls`. In Garmin's endpoint configuration, enable the four health settings it prints, each
-   with its URL: `HEALTH - Body Compositions`, `HEALTH - Dailies`, `HEALTH - HRV Summary` and
+3. Step 2 of your console now lists the four health settings, each with its URL. In Garmin's endpoint
+   configuration, enable them: `HEALTH - Body Compositions`, `HEALTH - Dailies`, `HEALTH - HRV Summary` and
    `HEALTH - Sleeps`. Leave every other health setting disabled, and save the page.
 
 Athletes are asked to share their health data on Garmin's consent screen, and athletes connected before are asked
@@ -227,7 +212,9 @@ connects two Garmin accounts of your own to the bridge, with no SweatStack in be
 it passes.
 
 Run `npm run verify` in your copy. It walks you through the steps below one at a time, and goes on once a step's
-data has reached the bridge. Type q to stop at any step, and run it again to carry on there.
+data has reached the bridge. Type q to stop at any step, and run it again to carry on there. It's the one step
+that still needs a terminal: clone the copy that Cloudflare made in your GitHub account, then, in that folder,
+run `npm ci` and, once on this computer, `npx wrangler login`.
 
 You need:
 
@@ -259,8 +246,8 @@ You can run Garmin's tests at any time: a setting without data shows which step 
   `npm run verify` prints a new link. If Garmin shows an error page instead, type n for a new link.
 - **If account A is already connected to your app**, the sign-in reconnects it, and the walk arrives as your
   activity.
-- **Until you set Garmin to Self-hosted**, `npm run status` counts these accounts as waiting for a user and shows
-  a `declare` failure, `sweatstack_409`. In `npx wrangler tail`, the bridge warns `sweatstack_not_connected` and
+- **Until you set Garmin to Self-hosted**, the console counts these accounts as waiting for SweatStack and
+  shows a `declare` failure, `sweatstack_409`. In `npx wrangler tail`, the bridge warns `sweatstack_not_connected` and
   `push_waiting_for_user`. All of that is expected here.
 
 | Garmin's test | What passes it |
@@ -268,7 +255,7 @@ You can run Garmin's tests at any time: a setting without data shows which step 
 | "A deregistration endpoint, a user permissions change endpoint, and at least 1 other endpoint must be enabled." | Step 1 |
 | "N enabled summary domain(s) without data in the last 24 hours." | Each setting you enabled gets data from a step, by the name Garmin's test shows: `ACTIVITY_FILE_DATA` from steps 3 and 5, `CONSUMER_PERMISSIONS` from step 6, `USER_DEREG` from step 7, `WELLNESS_BODY_COMP` from step 8, `WELLNESS_DAILY`, `WELLNESS_SLEEP` and `HRV` from step 9 |
 | "N user(s) with data uploaded in the last 24 hours. 2 required." | Steps 3 and 5 |
-| "N http error(s) in the last 24 hours." | The bridge answered every push. If it refused one, `npx wrangler tail` shows `webhook_refused` with the reason. `unknown_secret`: paste the URLs that `npm run urls` prints again. `unknown_kind`: disable that setting at Garmin. `invalid_body`: report it. Garmin counts an error for 24 hours |
+| "N http error(s) in the last 24 hours." | The bridge answered every push. If it refused one, `npx wrangler tail` shows `webhook_refused` with the reason. `unknown_secret`: paste the URLs from the console again. `unknown_kind`: disable that setting at Garmin. `invalid_body`: report it. Garmin counts an error for 24 hours |
 
 ## Fix a missing Disconnect button
 

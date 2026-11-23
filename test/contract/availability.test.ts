@@ -19,7 +19,7 @@ describe("before the owner has finished the setup", () => {
   it("still serves the root, with no data on it", async () => {
     const response = await request("/");
     expect(response.status).toBe(200);
-    expect(await response.text()).toMatch(/^A SweatStack bridge\. See https:\/\/github\.com\/\S+\n$/);
+    expect(await response.text()).toMatch(/^A SweatStack bridge\. Its owner signs in at \/console\. See https:\/\/github\.com\/\S+\n$/);
   });
 
   it.each(["/.well-known/openid-configuration", "/authorize", "/jwks"])("answers %s with 503, and doesn't say what's missing", async (path) => {

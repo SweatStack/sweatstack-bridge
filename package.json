@@ -11,9 +11,9 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "deploy": "node scripts/deploy.mjs",
-    "status": "node scripts/status.mjs",
+    "status": "node scripts/moved.mjs status",
     "update": "node scripts/update.mjs",
-    "urls": "node scripts/urls.mjs",
+    "urls": "node scripts/moved.mjs urls",
     "verify": "node scripts/verify.mjs",
     "test": "vitest run",
     "test:staging": "vitest run --config vitest.staging.config.ts",

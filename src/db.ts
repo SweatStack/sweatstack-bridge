@@ -482,7 +482,7 @@ export class Database {
       .first<JobRow>();
   }
 
-  /** A finished job stays for `npm run status`, without what it needed to run. `lastError` set means it failed. */
+  /** A finished job stays for the console's status, without what it needed to run. `lastError` set means it failed. */
   async finishJob(id: number, now: number, lastError: string | null): Promise<void> {
     await this.d1
       .prepare("UPDATE inbox SET done_at = ?, last_error = ?, payload = NULL, lease_until = NULL WHERE id = ?")

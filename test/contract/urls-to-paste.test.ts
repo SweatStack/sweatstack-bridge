@@ -1,11 +1,22 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { urlsToPaste } from "../../scripts/lib/urls.mjs";
 import { ISSUER, ORIGIN, pathOf, resetDatabase, world } from "../support/world";
 
+/** Every value the console gives the owner to paste, read from the signed-in page, as the owner reads it. */
 async function pasted(offers?: { wellness: boolean }) {
-  const secret = await env.DB.prepare("SELECT value FROM meta WHERE key = 'webhook_secret'").first<string>("value");
-  const urls = urlsToPaste(ORIGIN, secret, offers).flatMap((place) => place.urls);
+  const w = world({ settings: { GARMIN_APP_OFFERS: offers?.wellness ? "activities,activity_history,wellness" : "activities,activity_history" } });
+  const signIn = await w.request("/console/sign-in", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Origin: ORIGIN },
+    body: new URLSearchParams({ secret: w.sweatstack.clientSecret }).toString(),
+  });
+  const cookie = (signIn.headers.get("Set-Cookie") ?? "").split(";")[0] as string;
+  const html = await (await w.request("/console", { headers: { Cookie: cookie } })).text();
+  const urls = [...html.matchAll(/<input readonly(?:="")? value="([^"]+)" aria-label="([^"]+)"/g)].map(([, url, setting]) => ({
+    setting: setting as string,
+    url: url as string,
+    check: / - /.test(setting as string) ? "webhook" : undefined,
+  }));
   const find = (setting: string) => urls.find((entry) => entry.setting === setting)?.url ?? "";
   return { urls, find };
 }

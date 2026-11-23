@@ -175,7 +175,8 @@ const STEPS = [
     title: "Garmin's notifications",
     run: async (io, deps) => {
       const health = deps.wellness ? ", including the health settings" : "";
-      io.print(`   In Garmin's developer portal, paste the URLs that npm run urls prints, and enable the settings it lists${health}.
+      io.print(`   In Garmin's endpoint configuration, enable the settings that step 2 of your console lists${health}, each with its URL:
+   ${deps.origin}/console
    More: ${NOTIFICATIONS_SECTION}`);
       return (await io.ask("   Press Enter when they're set, or type q to stop.")) === "q" ? "quit" : "done";
     },

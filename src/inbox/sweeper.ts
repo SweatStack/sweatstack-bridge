@@ -6,7 +6,7 @@ import { allProviders } from "../providers";
 import { REFRESH_GRANT_WITHIN_SECONDS, UNCLAIMED_AFTER_SECONDS } from "./lifecycle";
 import { drain } from "./worker";
 
-/** Long enough for `npm run status` to show recent history. */
+/** Long enough for the console's status to show recent history. */
 const KEEP_FINISHED_JOBS_SECONDS = 30 * 24 * 60 * 60;
 
 /** After such a job gives up, how long before the sweeper adds another: a permanent refusal costs one try a day. */

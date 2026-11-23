@@ -14,7 +14,7 @@ describe("the deploy form", () => {
     expect(Object.keys(packageJson.cloudflare.bindings).sort()).toEqual([...secrets, ...vars].sort());
   });
 
-  it("asks for every secret the bridge needs: npm run status reads this list too", () => {
+  it("asks for every secret the bridge needs", () => {
     const empty = readConfig({ DB: null as never, SWEATSTACK_URL: "https://x.test" }, garmin({ env: {} as never, fetch, now: () => 0 }));
     expect(empty.ok).toBe(false);
     const missing = empty.ok ? [] : empty.problems.map((problem) => problem.replace(" is not set", ""));

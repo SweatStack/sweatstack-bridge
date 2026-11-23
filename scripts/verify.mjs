@@ -23,7 +23,7 @@ function stop(message) {
 async function checkReady(origin) {
   const response = await fetch(`${origin}/start/garmin_connect/none`, { redirect: "manual", signal: AbortSignal.timeout(10_000) }).catch(() => null);
   if (response === null) stop(`The bridge doesn't answer at ${origin}. Is it deployed, at this address?`);
-  if (response.status === 503) stop("The bridge's settings aren't complete. Run npm run status to see which.");
+  if (response.status === 503) stop(`The bridge's settings aren't complete. Its console says which: ${origin}/console`);
   if (response.status !== 400) stop(`The address ${origin} answers ${response.status}, so the bridge isn't there. Is it deployed?`);
 }
 

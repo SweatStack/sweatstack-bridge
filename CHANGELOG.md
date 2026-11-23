@@ -3,6 +3,12 @@
 Versions follow [Semantic Versioning](https://semver.org). `npm run update` moves a deployment between
 them.
 
+## Unreleased
+
+- **Your bridge has a console**, at its address with `/console` at the end. Sign in with the bridge's SweatStack client secret. It takes you through setup in four steps, one place each: connect your Garmin app, turn on Garmin's notifications, pass Garmin's verification, and switch SweatStack to your bridge. Each step gives the exact values to paste, links straight to the right screen, and ticks itself off when the bridge sees it working: a Garmin sign-in, Garmin's first notification, SweatStack registering. Then it's your status: when Garmin last sent to each URL, how many athletes are connected, failures with their fix, and a newer release. Setting up needs no terminal any more, apart from Garmin's verification.
+- **`npm run status` and `npm run urls` moved to the console.** For this release, they print the console's address.
+- **The bridge's root page says where the console is.**
+
 ## 0.5.1
 
 - **Activities an athlete imports into Garmin Connect reach SweatStack**, such as a FIT file from another device or app. Garmin marks an activity manual when no device recorded it, and the bridge skipped all of these as having no file. It now relays each one that comes with a file. An activity entered by hand comes with one too, but with no activity data in it, so SweatStack records that upload as failed with `no_data`. This also lets step 3 of `npm run verify` finish once the walk is imported: before, it waited until you typed s.

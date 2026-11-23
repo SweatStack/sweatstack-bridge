@@ -5,6 +5,9 @@ It's a small service that runs in your own Cloudflare account, and it works with
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/SweatStack/sweatstack-bridge)
 
+Then open your bridge's address with `/console` at the end. It takes you through the rest, with the exact values
+to paste, and ticks each step off when it sees it working.
+
 ```
 Wearable platform (Garmin)  ──►  Bridge, in your Cloudflare account  ──►  SweatStack  ──►  Your app
 ```
