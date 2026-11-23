@@ -105,7 +105,8 @@ describe("npm run status", () => {
     await w.settled();
     await w.ping(w.garmin.fileReady(kari, "1"));
     const row = await env.DB.prepare("SELECT user_id, access_token, refresh_token FROM connections").first<Record<string, string>>();
-    const meta = await env.DB.prepare("SELECT value FROM meta").all<{ value: string }>();
+    // What the bridge has seen is only a time, as the report shows the last file's.
+    const meta = await env.DB.prepare("SELECT value FROM meta WHERE key NOT LIKE 'seen:%'").all<{ value: string }>();
     const text = `${await report()}${JSON.stringify(await readDatabase())}`;
     for (const secret of [sub, row?.user_id, row?.access_token, row?.refresh_token, kari.userId, ...meta.results.map(({ value }) => value)]) {
       expect(text).not.toContain(secret);

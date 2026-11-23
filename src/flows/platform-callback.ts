@@ -1,5 +1,6 @@
 import { errorRedirect, type PlatformContext } from "../context";
 import { deriveSubject, hashSecret, randomToken } from "../crypto";
+import { SEEN } from "../db";
 import { log } from "../log";
 import { historyToAsk } from "../inbox/lifecycle";
 import { PlatformError } from "../providers/types";
@@ -37,6 +38,7 @@ export async function platformCallback(c: PlatformContext): Promise<Response> {
     await db.saveConsent({ sub, provider: provider.name, ...tokens, permissions, consentedAt: deps.now() }, [...followUps]);
     await declareAfterConsent({ config, db, deps, provider }, sub, { state: flow.rp_state, platformUserId });
     await db.issueCode(flow.id, await hashSecret(issued), sub, deps.now() + CODE_LIFETIME_SECONDS);
+    await db.markSeen(SEEN.consent(provider.name), deps.now());
   } catch (failure) {
     log("consent_failed", {
       provider: provider.name,

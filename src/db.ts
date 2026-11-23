@@ -1,4 +1,5 @@
 /** Typed SQL, one method per query. Times are seconds since the epoch. */
+import { warn } from "./log";
 
 export interface ClientRow {
   provider: string;
@@ -53,6 +54,17 @@ export interface Consent {
 }
 
 export type MetaKey = "webhook_secret" | "subject_key" | "signing_key";
+
+/**
+ * What the bridge has seen happen, by its key in `meta`, for the console (plan 006, C5). Each records when it
+ * last happened and nothing else: no subject, user or body.
+ */
+export const SEEN = {
+  /** A platform sign-in completed: the platform accepted the bridge's keys and its redirect URL. */
+  consent: (provider: string) => `seen:consent:${provider}`,
+  /** A push was accepted, by the last part of the URL it came to: the platform calls that URL. */
+  push: (provider: string, webhook: string) => `seen:push:${provider}:${webhook}`,
+};
 
 export type JobKind =
   | "activity_file"
@@ -118,6 +130,19 @@ export class Database {
       .prepare("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value")
       .bind(key, value)
       .run();
+  }
+
+  /** Never throws: a record kept for the console mustn't fail the sign-in or the push it records. */
+  async markSeen(key: string, now: number): Promise<void> {
+    await this.setMeta(key, String(now)).catch((error: unknown) =>
+      warn("seen_not_recorded", { key, error: error instanceof Error ? error.name : "unknown" }),
+    );
+  }
+
+  /** Everything the bridge has seen, by key, with when it last saw it. */
+  async seen(): Promise<Map<string, number>> {
+    const { results } = await this.d1.prepare("SELECT key, value FROM meta WHERE key LIKE 'seen:%'").all<{ key: string; value: string }>();
+    return new Map(results.map(({ key, value }) => [key, Number(value)]));
   }
 
   client(provider: string): Promise<ClientRow | null> {

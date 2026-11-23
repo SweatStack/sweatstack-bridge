@@ -1,6 +1,6 @@
 import type { PlatformContext } from "../context";
 import { deriveSubject, secureEqual } from "../crypto";
-import type { QueuedEvent } from "../db";
+import { SEEN, type QueuedEvent } from "../db";
 import { drain } from "../inbox/worker";
 import { warn } from "../log";
 
@@ -51,6 +51,7 @@ export async function webhook(c: PlatformContext): Promise<Response> {
     }),
   );
   await db.enqueueEvents(events);
+  await db.markSeen(SEEN.push(provider.name, kind), now);
 
   deps.waitUntil(drain(deps));
   return c.body(null, 200);

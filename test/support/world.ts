@@ -28,7 +28,10 @@ export async function setSigningKey(present: boolean): Promise<void> {
 
 /** A clean slate, with the secrets the first migration made left in place. */
 export async function resetDatabase({ withSigningKey }: { withSigningKey: boolean }): Promise<void> {
-  await env.DB.batch(["clients", "flows", "connections", "tokens", "inbox", "seen_jtis"].map((table) => env.DB.prepare(`DELETE FROM ${table}`)));
+  await env.DB.batch([
+    ...["clients", "flows", "connections", "tokens", "inbox", "seen_jtis"].map((table) => env.DB.prepare(`DELETE FROM ${table}`)),
+    env.DB.prepare("DELETE FROM meta WHERE key LIKE 'seen:%'"),
+  ]);
   await setSigningKey(withSigningKey);
 }
 
