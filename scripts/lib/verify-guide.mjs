@@ -16,6 +16,8 @@ export const POLL_MS = 15_000;
 const DAY = 24 * 60 * 60;
 const HOURS_6 = 6 * 60 * 60;
 const IMPORT_URL = "https://connect.garmin.com/app/import-data";
+/** Where an athlete disconnects an app in Garmin Connect. */
+const ACCOUNT_URL = "https://connect.garmin.com/app/settings/accountInformation";
 const TESTS_URL = "https://apis.garmin.com/tools/partnerVerification";
 const NOTIFICATIONS_SECTION = "https://github.com/SweatStack/sweatstack-bridge/blob/main/RUNBOOK.md#set-up-garmins-notifications";
 
@@ -195,9 +197,9 @@ const STEPS = [
   },
   {
     id: "remove_b",
-    title: "remove the app for account B",
+    title: "disconnect the app for account B",
     run: (io, deps, state) => {
-      io.print("   With account B, remove your app in Garmin Connect.");
+      io.print(`   With account B, open ${ACCOUNT_URL} and select Disconnect for your app.`);
       return waitForData(io, deps, state, (progress) => !progress.connected.has(state.accounts.b), "Garmin sent account B's deregistration.");
     },
   },

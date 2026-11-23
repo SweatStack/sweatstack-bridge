@@ -3,6 +3,11 @@
 Versions follow [Semantic Versioning](https://semver.org). `npm run update` moves a deployment between
 them.
 
+## Unreleased
+
+- **Garmin calls removing an app Disconnect.** The runbook and `npm run verify` now say so, and link the page in Garmin Connect where an athlete does it: [Account Information](https://connect.garmin.com/app/settings/accountInformation).
+- **The tests pass in a checkout on Windows.** Git gave the files Windows line endings there, which broke the migrations' checksum test and a script test. `.gitattributes` now keeps Unix line endings everywhere.
+
 ## 0.5.1
 
 - **Activities an athlete imports into Garmin Connect reach SweatStack**, such as a FIT file from another device or app. Garmin marks an activity manual when no device recorded it, and the bridge skipped all of these as having no file. It now relays each one that comes with a file. An activity entered by hand comes with one too, but with no activity data in it, so SweatStack records that upload as failed with `no_data`. This also lets step 3 of `npm run verify` finish once the walk is imported: before, it waited until you typed s.
