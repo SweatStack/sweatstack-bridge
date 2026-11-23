@@ -9,6 +9,8 @@ them.
 - **Garmin's verification is a walk in the console**, one step at a time, each moving on by itself once its data reaches the bridge. Close the page whenever you like: it keeps its place. Each account adds an activity by hand in Garmin Connect, which Garmin's tests count, so there's no file to import.
 - **`npm run status`, `npm run urls` and `npm run verify` moved to the console.** For this release, they print where.
 - **The bridge's root page says where the console is.**
+- **Garmin calls removing an app Disconnect.** The runbook and the walk now say so, and link the page in Garmin Connect where an athlete does it: [Account Information](https://connect.garmin.com/app/settings/accountInformation).
+- **The tests pass in a checkout on Windows.** Git gave the files Windows line endings there, which broke the migrations' checksum test and a script test. `.gitattributes` now keeps Unix line endings everywhere.
 
 ## 0.5.1
 
