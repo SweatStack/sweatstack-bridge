@@ -5,6 +5,7 @@ import { setting } from "../config";
 import type { Deps } from "../deps";
 import { log } from "../log";
 import { isClientSecret, isSession, newSession, SESSION_COOKIE, SESSION_SECONDS } from "./session";
+import { gatherFacts } from "./facts";
 import { ConsolePage, NoSecretPage, SignInPage } from "./views";
 
 /**
@@ -39,15 +40,15 @@ export function consoleRoutes(deps: Deps): Hono {
   app.use(csrf());
 
   const clientSecret = () => setting(deps.env, "SWEATSTACK_CLIENT_SECRET");
-  const host = (url: string) => new URL(url).host;
+  const origin = (url: string) => new URL(url).origin;
 
   app.get("/", async (c) => {
     const secret = clientSecret();
-    if (secret === undefined) return c.html(NoSecretPage({ host: host(c.req.url) }));
+    if (secret === undefined) return c.html(NoSecretPage({ origin: origin(c.req.url) }));
     if (!(await isSession(getCookie(c, SESSION_COOKIE), secret, deps.now()))) {
-      return c.html(SignInPage({ host: host(c.req.url), failed: false }));
+      return c.html(SignInPage({ origin: origin(c.req.url), failed: false }));
     }
-    return c.html(ConsolePage({ host: host(c.req.url) }));
+    return c.html(ConsolePage({ facts: await gatherFacts(deps, origin(c.req.url)) }));
   });
 
   app.post("/sign-in", async (c) => {
@@ -57,7 +58,7 @@ export function consoleRoutes(deps: Deps): Hono {
     const attempt = typeof form.secret === "string" ? form.secret : "";
     const ok = await isClientSecret(attempt, secret);
     log("console_sign_in", { ok });
-    if (!ok) return c.html(SignInPage({ host: host(c.req.url), failed: true }), 401);
+    if (!ok) return c.html(SignInPage({ origin: origin(c.req.url), failed: true }), 401);
     setCookie(c, SESSION_COOKIE, await newSession(secret, deps.now()), { ...COOKIE_OPTIONS, maxAge: SESSION_SECONDS });
     return c.redirect("/console", 303);
   });

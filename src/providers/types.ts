@@ -104,8 +104,8 @@ export interface PlatformGuide {
   readonly capabilities: Readonly<Record<Capability, { readonly label: string; readonly description: string }>>;
   /** The setting that says what the app is approved for. */
   readonly offersSetting: string;
-  /** The platform's own check of the app, if it has one. */
-  readonly verification?: { readonly place: string; readonly why: string };
+  /** The platform's own check of the app, if it has one, and the runbook's section that walks through it. */
+  readonly verification?: { readonly place: string; readonly why: string; readonly runbookSection: string };
 }
 
 /** One of the platform's notification settings, and the webhook it calls. */

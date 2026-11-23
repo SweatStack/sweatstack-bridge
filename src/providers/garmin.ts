@@ -82,6 +82,7 @@ const GUIDE: PlatformGuide = {
   verification: {
     place: "Garmin Connect, with two accounts",
     why: "Your app works without it. Until it passes, Garmin tells your athletes that your app is unverified.",
+    runbookSection: "pass-garmins-verification",
   },
 };
 

@@ -19,6 +19,10 @@
     "GARMIN_APP_OFFERS": "activities,activity_history"
   },
 
+  // The console's stylesheet, script and icon, under /console/. Nothing else lives in public/, so no file can
+  // stand in for a route.
+  "assets": { "directory": "public" },
+
   // Every minute: retries, and deleting what's over.
   "triggers": { "crons": ["* * * * *"] },
 

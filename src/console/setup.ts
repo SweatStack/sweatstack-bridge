@@ -72,6 +72,24 @@ export function pasteValues(facts: Facts) {
 /** SweatStack's tabs that a fix points to. */
 export type SweatStackTab = "consent" | "data-sources" | "oauth";
 
+/** A tab of the app in SweatStack, or null until SweatStack's address and the Client ID are both set. */
+export function sweatstackTab(facts: Facts, tab: SweatStackTab): string | null {
+  return facts.sweatstack === null ? null : `${facts.sweatstack.url}/applications/${encodeURIComponent(facts.sweatstack.clientId)}/${tab}`;
+}
+
+/**
+ * The Worker's settings in Cloudflare, where secrets are added. `:account` lets Cloudflare fill in the account,
+ * so the link holds nothing about it. The Worker's name is only known on its `workers.dev` address: on a
+ * custom domain, the link goes to the list of Workers.
+ */
+export function cloudflareSettings(origin: string): string {
+  const { hostname } = new URL(origin);
+  const worker = hostname.endsWith(".workers.dev") ? hostname.split(".")[0] : undefined;
+  return worker === undefined
+    ? "https://dash.cloudflare.com/?to=/:account/workers-and-pages"
+    : `https://dash.cloudflare.com/?to=/:account/workers/services/view/${worker}/production/settings`;
+}
+
 /** Failures with one known fix. Retrying can't help with any of them: they need the owner. */
 function fixFor(kind: JobKind, reason: string, platformName: string): { text: string; tab: SweatStackTab } | null {
   const tickWrite = (what: string) => ({

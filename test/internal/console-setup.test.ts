@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Facts } from "../../src/console/facts";
-import { banners, notificationRows, pasteValues, setup } from "../../src/console/setup";
+import { banners, cloudflareSettings, notificationRows, pasteValues, setup, sweatstackTab } from "../../src/console/setup";
+import { ago, utc } from "../../src/console/time";
 import { status } from "../../src/console/status";
 import type { Activity } from "../../src/db";
 import { garmin } from "../../src/providers/garmin";
@@ -188,5 +189,39 @@ describe("the status", () => {
       failures: 3,
     });
     expect(status(factsWith({ activity, offers: ["activities", "wellness"] })).lastWellness).toBe(NOW - 600);
+  });
+});
+
+describe("the links", () => {
+  it("go straight to the app's tab in SweatStack", () => {
+    expect(sweatstackTab(factsWith(), "data-sources")).toBe("https://app.sweatstack.no/applications/app-1/data-sources");
+    expect(sweatstackTab(factsWith({ sweatstack: null }), "oauth")).toBeNull();
+  });
+
+  it.each([
+    ["https://sweatstack-bridge.molab.workers.dev", "https://dash.cloudflare.com/?to=/:account/workers/services/view/sweatstack-bridge/production/settings"],
+    ["https://garmin.molab.run", "https://dash.cloudflare.com/?to=/:account/workers-and-pages"],
+  ])("go to the Worker's settings in Cloudflare from %s", (origin, link) => {
+    expect(cloudflareSettings(origin)).toBe(link);
+  });
+});
+
+describe("times", () => {
+  it.each([
+    [0, "just now"],
+    [59, "just now"],
+    [60, "1 minute ago"],
+    [18 * 60, "18 minutes ago"],
+    [3600, "1 hour ago"],
+    [20 * 3600, "20 hours ago"],
+    [24 * 3600, "yesterday"],
+    [2 * 24 * 3600, "2 days ago"],
+    [-30, "just now"],
+  ])("say %i seconds ago as %j", (seconds, text) => {
+    expect(ago(NOW - seconds, NOW)).toBe(text);
+  });
+
+  it("give the exact time in UTC", () => {
+    expect(utc(NOW)).toBe("2027-01-15 08:00 UTC");
   });
 });
