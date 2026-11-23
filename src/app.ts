@@ -1,5 +1,7 @@
 import { Hono, type MiddlewareHandler } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { readConfig } from "./config";
+import { consoleRoutes } from "./console";
 import type { PlatformVariables } from "./context";
 import { Database } from "./db";
 import type { Deps } from "./deps";
@@ -22,6 +24,9 @@ export function createApp(deps: Deps): Hono {
 
   app.get("/", (c) => c.text(`A SweatStack bridge. See ${README_URL}\n`));
 
+  // Before the platform routes, whose webhook route would otherwise match a console path.
+  app.route("/console", consoleRoutes(deps));
+
   const platform = new Hono<{ Variables: PlatformVariables }>();
   platform.use(servesPlatform(deps));
   platform.get("/oidc/:provider/.well-known/openid-configuration", discovery);
@@ -39,6 +44,8 @@ export function createApp(deps: Deps): Hono {
   // A message can carry a URL or a token, so it's logged only from the database, which reports the
   // statement and never the values bound to it.
   app.onError((error, c) => {
+    // An answer a middleware chose, such as the console's CSRF check refusing a request.
+    if (error instanceof HTTPException) return error.getResponse();
     log("request_failed", {
       error: error.name,
       route: c.req.routePath,

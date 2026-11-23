@@ -46,7 +46,8 @@ export function readConfig(env: Env, provider: { requiredSettings: readonly stri
   return { ok: true, config: { sweatstackUrl, appId, clientSecret, backfillDays } };
 }
 
-function setting(env: Env, name: string): string | undefined {
+/** A setting's value, or undefined when it's missing or empty. */
+export function setting(env: Env, name: string): string | undefined {
   const value = env[name];
   return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
 }
