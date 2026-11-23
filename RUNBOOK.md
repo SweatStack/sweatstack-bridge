@@ -158,7 +158,7 @@ Garmin allows one URL per setting, so any other server you had on these settings
 |---|---|
 | Activity Files | New activities and history never arrive, because Garmin announces both through this setting. A sign-in still works |
 | User Permissions Change | When an athlete changes what they share, the status and the Portal stay out of date, and history doesn't start when they allow it later |
-| Deregistrations | When an athlete removes your app in Garmin Connect, the connection stays. It only shows as needing a reconnect once the bridge next fails to use its token |
+| Deregistrations | When an athlete disconnects your app in Garmin Connect, the connection stays. It only shows as needing a reconnect once the bridge next fails to use its token |
 | A health setting | No dailies of that kind arrive. The console says nothing has come to that URL |
 
 The bridge can't know about anything that happened before the URL was set. To correct a connection from that
@@ -170,7 +170,7 @@ time, have the athlete sign in again.
 |---|---|
 | Sync an activity | A finished `activity_file` row with no `last_error` |
 | Change what you share with the app | A finished `permissions_change` row |
-| Remove the app from your connected apps | The connection is gone, and a finished `declare` row is left |
+| Disconnect the app, under [Account Information](https://connect.garmin.com/app/settings/accountInformation) | The connection is gone, and a finished `declare` row is left |
 | Sync a watch or a scale, with wellness on offer | A finished `wellness` row with no `last_error` |
 
 ```sh
@@ -229,7 +229,8 @@ First, [set up Garmin's notifications](#set-up-garmins-notifications), and the h
 3. Connect account B with a new link, as in step 1.
 4. With account B, add a manual activity.
 5. With account B, turn off one of your app's permissions in Garmin Connect.
-6. With account B, remove your app in Garmin Connect.
+6. With account B, disconnect your app in Garmin Connect: open
+   [Account Information](https://connect.garmin.com/app/settings/accountInformation), and select **Disconnect**.
 7. Only with wellness: with account A, enter a weight in Garmin Connect.
 8. Only with wellness: wear the watch tonight. Tomorrow morning, sync it with the Garmin Connect app.
 9. Open Garmin's [partner verification](https://apis.garmin.com/tools/partnerVerification), sign in with your

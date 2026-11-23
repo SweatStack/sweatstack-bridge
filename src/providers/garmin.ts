@@ -81,6 +81,9 @@ function activityStep(account: "a" | "b"): VerificationStep {
   };
 }
 
+/** Where an athlete disconnects an app in Garmin Connect. */
+const GARMIN_CONNECT_ACCOUNT = "https://connect.garmin.com/app/settings/accountInformation";
+
 /** What the console tells the owner, in the words of Garmin's developer portal and endpoint configuration. */
 const GUIDE: PlatformGuide = {
   name: "Garmin",
@@ -92,7 +95,7 @@ const GUIDE: PlatformGuide = {
     signIn: "Sign in there with your consumer key and secret.",
     settings: [
       { label: "ACTIVITY - Activity Files", webhook: ACTIVITY_FILES_WEBHOOK },
-      { label: "COMMON - Deregistrations", webhook: DEREGISTRATIONS_WEBHOOK, quietUntil: "an athlete removes your app" },
+      { label: "COMMON - Deregistrations", webhook: DEREGISTRATIONS_WEBHOOK, quietUntil: "an athlete disconnects your app" },
       { label: "COMMON - User Permissions Change", webhook: PERMISSIONS_WEBHOOK, quietUntil: "an athlete changes what they share" },
       { label: "HEALTH - Body Compositions", webhook: "body-compositions", forCapability: "wellness", quietUntil: "an athlete records a weight" },
       { label: "HEALTH - Dailies", webhook: "dailies", forCapability: "wellness" },
@@ -132,10 +135,10 @@ const GUIDE: PlatformGuide = {
       },
       {
         id: "remove_b",
-        title: "Remove your app",
+        title: "Disconnect your app",
         account: "b",
-        instructions: ["In Garmin Connect, signed in as account B, remove your app from the connected apps."],
-        link: { label: "Garmin Connect", url: "https://connect.garmin.com" },
+        instructions: ["In Garmin Connect, signed in as account B, open Account Information. Select Disconnect for your app."],
+        link: { label: "Garmin Connect, Account Information", url: GARMIN_CONNECT_ACCOUNT },
         proof: { kind: "removed" },
       },
       {
