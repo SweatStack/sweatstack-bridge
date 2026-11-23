@@ -56,8 +56,8 @@ export interface Consent {
 export type MetaKey = "webhook_secret" | "subject_key" | "signing_key";
 
 /**
- * What the bridge has seen happen, by its key in `meta`, for the console (plan 006, C5). Each records when it
- * last happened and nothing else: no subject, user or body.
+ * What the bridge has seen happen, by its key in `meta`, for the console. Each records when it last happened
+ * and nothing else: no subject, user or body.
  */
 export const SEEN = {
   /** A platform sign-in completed: the platform accepted the bridge's keys and its redirect URL. */
@@ -102,6 +102,20 @@ export type QueuedEvent =
   | { kind: "wellness"; provider: string; sub: string; payload: string; now: number }
   | { kind: "permissions_change" | "deregistration"; provider: string; sub: string; now: number };
 
+/**
+ * What the console's status shows: counts and the fixed codes that jobs record. Nothing here
+ * is a token, a subject or a user id.
+ */
+export interface Activity {
+  connections: { total: number; waitingForUser: number; needsReconnect: number };
+  waiting: { kind: JobKind; reason: string | null; count: number }[];
+  /** Jobs that gave up, kept for 30 days. */
+  failures: { kind: JobKind; reason: string; count: number; latest: number }[];
+  lastFile: number | null;
+  lastWellness: number | null;
+  signingKey: boolean;
+}
+
 /** The next run carries on, so a day when everyone is due can't become one enormous statement. */
 const MAX_DUE_PER_RUN = 100;
 
@@ -143,6 +157,42 @@ export class Database {
   async seen(): Promise<Map<string, number>> {
     const { results } = await this.d1.prepare("SELECT key, value FROM meta WHERE key LIKE 'seen:%'").all<{ key: string; value: string }>();
     return new Map(results.map(({ key, value }) => [key, Number(value)]));
+  }
+
+  async activity(provider: string): Promise<Activity> {
+    const [connections, waiting, failures, last, signingKey] = await this.d1.batch([
+      this.d1
+        .prepare(
+          `SELECT COUNT(*) AS total, COALESCE(SUM(user_id IS NULL), 0) AS waitingForUser, COALESCE(SUM(needs_reconnect), 0) AS needsReconnect
+           FROM connections WHERE provider = ?`,
+        )
+        .bind(provider),
+      this.d1
+        .prepare("SELECT kind, last_error AS reason, COUNT(*) AS count FROM inbox WHERE done_at IS NULL AND provider = ? GROUP BY kind, last_error ORDER BY kind, last_error")
+        .bind(provider),
+      this.d1
+        .prepare(
+          `SELECT kind, last_error AS reason, COUNT(*) AS count, MAX(done_at) AS latest FROM inbox
+           WHERE done_at IS NOT NULL AND last_error IS NOT NULL AND provider = ? GROUP BY kind, last_error ORDER BY latest DESC`,
+        )
+        .bind(provider),
+      this.d1
+        .prepare(
+          `SELECT MAX(CASE WHEN kind = 'activity_file' THEN received_at END) AS lastFile,
+                  MAX(CASE WHEN kind = 'wellness' THEN received_at END) AS lastWellness
+           FROM inbox WHERE provider = ?`,
+        )
+        .bind(provider),
+      this.d1.prepare("SELECT COUNT(*) AS count FROM meta WHERE key = 'signing_key'"),
+    ]);
+    const first = <T>(result: D1Result<unknown> | undefined) => (result?.results[0] ?? {}) as T;
+    return {
+      connections: first<Activity["connections"]>(connections),
+      waiting: (waiting?.results ?? []) as Activity["waiting"],
+      failures: (failures?.results ?? []) as Activity["failures"],
+      ...first<Pick<Activity, "lastFile" | "lastWellness">>(last),
+      signingKey: first<{ count: number }>(signingKey).count > 0,
+    };
   }
 
   client(provider: string): Promise<ClientRow | null> {

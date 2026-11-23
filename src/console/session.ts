@@ -1,7 +1,7 @@
 import { secureEqual } from "../crypto";
 
 /**
- * Signing in to the console, and the session it gives (plan 006, C1 and C2).
+ * Signing in to the console, and the session it gives.
  *
  * The owner signs in with the bridge's SweatStack client secret: they already hold it, and whoever holds it
  * can already do everything to the app, so the console adds no authority. The session is a cookie that only

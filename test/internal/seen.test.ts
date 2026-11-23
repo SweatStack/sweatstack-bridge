@@ -9,7 +9,7 @@ const db = new Database(env.DB);
 /** Everything under `seen:` in `meta`, as the console reads it. */
 const seen = async () => Object.fromEntries(await db.seen());
 
-describe("what the bridge has seen, for the console (plan 006, C5)", () => {
+describe("what the bridge has seen, for the console", () => {
   let w: ReturnType<typeof world>;
   let client: Client;
 

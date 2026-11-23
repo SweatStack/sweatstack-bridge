@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ORIGIN, resetDatabase, world } from "../support/world";
 
-/** Plan 006: C1 (signing in with the client secret), C2 (the session), C9 (headers and CSRF), C12 (logs). */
+/** Signing in with the client secret, the session, the console's headers and CSRF, and the logs. */
 
 const SESSION_SECONDS = 12 * 60 * 60;
 const SIGNED_IN = 'data-page="console"';

@@ -45,6 +45,8 @@ export interface WorldOptions {
   database?: D1Database;
   /** Answers a call instead of the fake, for a test of a bad moment at SweatStack. Undefined lets it through. */
   intercept?: (request: Request) => Response | undefined | Promise<Response | undefined>;
+  /** Answers for any other host, such as GitHub's. Undefined lets the default answer through. */
+  elsewhere?: (request: Request) => Response | undefined | Promise<Response | undefined>;
 }
 
 export interface Client {
@@ -56,7 +58,7 @@ export interface Client {
  * The bridge between a fake SweatStack and a fake Garmin, and SweatStack's side of a sign-in: the same
  * requests and the same checks as its relying party.
  */
-export function world({ sweatstack: sweatstackOptions, settings: extraSettings, garmin: sharedGarmin, intercept, database }: WorldOptions = {}) {
+export function world({ sweatstack: sweatstackOptions, settings: extraSettings, garmin: sharedGarmin, intercept, elsewhere: answerElsewhere, database }: WorldOptions = {}) {
   const clock = { now: 1_800_000_000 };
   const sweatstack = new FakeSweatStack({ now: () => clock.now, ...sweatstackOptions });
   const garmin = sharedGarmin ?? new FakeGarmin();
@@ -75,9 +77,9 @@ export function world({ sweatstack: sweatstackOptions, settings: extraSettings, 
 
   /** Whatever reached a host that isn't Garmin's or SweatStack's: a forged ping's address. */
   const foreignCalls: { url: string; authorization: string | null }[] = [];
-  const elsewhere: Handler = (request) => {
+  const elsewhere: Handler = async (request) => {
     foreignCalls.push({ url: request.url, authorization: request.headers.get("Authorization") });
-    return new Response("not a file");
+    return (await answerElsewhere?.(request)) ?? new Response("not a file");
   };
   const hosts: Record<string, Handler> = {
     [new URL(sweatstack.url).host]: async (request) => (await intercept?.(request.clone())) ?? sweatstack.fetch(request),
@@ -227,7 +229,7 @@ export function world({ sweatstack: sweatstackOptions, settings: extraSettings, 
     return { ...flow, claims, sub: claims.sub as string };
   };
 
-  return { sweatstack, garmin, clock, hooks, sleeps, foreignCalls, webhook, ping, notify, disconnect, cron, request, discoveryPath, postRegistration, register, authorize, exchange, consent, signIn, settled, verifyIdToken };
+  return { deps, sweatstack, garmin, clock, hooks, sleeps, foreignCalls, webhook, ping, notify, disconnect, cron, request, discoveryPath, postRegistration, register, authorize, exchange, consent, signIn, settled, verifyIdToken };
 }
 
 export function pathOf(url: string): string {

@@ -81,11 +81,53 @@ export class PlatformError extends Error {
   }
 }
 
+/**
+ * What the console tells the owner to do on the platform's side, in the words of the platform's own tools,
+ * so that core code renders it without naming the platform.
+ */
+export interface PlatformGuide {
+  /** The platform's short name, as in "Connect your Garmin app". */
+  readonly name: string;
+  /** Where the owner manages their app on the platform. */
+  readonly developerPortal: { readonly label: string; readonly url: string };
+  /** What the platform calls the redirect URL in its app's settings. */
+  readonly redirectUrlLabel: string;
+  /** Where the owner turns on the platform's notifications, how they get in, and what they turn on there. */
+  readonly notifications: {
+    readonly label: string;
+    readonly url: string;
+    readonly signIn: string;
+    /** In the order the platform's tool lists them. */
+    readonly settings: readonly NotificationSetting[];
+  };
+  /** What each capability means for an athlete, for the owner who checks what their app is approved for. */
+  readonly capabilities: Readonly<Record<Capability, { readonly label: string; readonly description: string }>>;
+  /** The setting that says what the app is approved for. */
+  readonly offersSetting: string;
+  /** The platform's own check of the app, if it has one. */
+  readonly verification?: { readonly place: string; readonly why: string };
+}
+
+/** One of the platform's notification settings, and the webhook it calls. */
+export interface NotificationSetting {
+  /** Its name in the platform's tool. */
+  readonly label: string;
+  readonly webhook: string;
+  /** Only an app that offers this turns it on. */
+  readonly forCapability?: Capability;
+  /**
+   * When it's normal for it to have sent nothing yet, as the end of "nothing yet, which is normal until…".
+   * Absent for a setting that sends without anyone acting, whose first push proves the notifications work.
+   */
+  readonly quietUntil?: string;
+}
+
 /** Everything core code knows about a platform. It grows with the milestones that use it. */
 export interface Provider {
   /** The name SweatStack knows the platform by, and the path segment of its routes. */
   readonly name: string;
   readonly label: string;
+  readonly guide: PlatformGuide;
   /** The settings this platform can't run without: their names, for telling the owner what's missing. */
   readonly requiredSettings: readonly string[];
   /** What's wrong with this platform's settings, beyond what's missing. */

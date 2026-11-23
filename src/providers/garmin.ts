@@ -9,6 +9,7 @@ import {
   type ConnectionState,
   type DownloadedFile,
   type HistoryProgress,
+  type PlatformGuide,
   type PlatformTokens,
   type Provider,
   type WebhookEvent,
@@ -50,6 +51,38 @@ const WELLNESS_WEBHOOKS: Readonly<Record<string, string>> = {
   sleeps: "sleeps",
   "body-compositions": "bodyComps",
   hrv: "hrv",
+};
+
+/** What the console tells the owner, in the words of Garmin's developer portal and endpoint configuration. */
+const GUIDE: PlatformGuide = {
+  name: "Garmin",
+  developerPortal: { label: "Garmin's developer portal", url: "https://developerportal.garmin.com" },
+  redirectUrlLabel: "OAuth 2 redirect URL",
+  notifications: {
+    label: "Garmin's endpoint configuration",
+    url: "https://apis.garmin.com/tools/endpoints",
+    signIn: "Sign in there with your consumer key and secret.",
+    settings: [
+      { label: "ACTIVITY - Activity Files", webhook: ACTIVITY_FILES_WEBHOOK },
+      { label: "COMMON - Deregistrations", webhook: DEREGISTRATIONS_WEBHOOK, quietUntil: "an athlete removes your app" },
+      { label: "COMMON - User Permissions Change", webhook: PERMISSIONS_WEBHOOK, quietUntil: "an athlete changes what they share" },
+      { label: "HEALTH - Body Compositions", webhook: "body-compositions", forCapability: "wellness", quietUntil: "an athlete records a weight" },
+      { label: "HEALTH - Dailies", webhook: "dailies", forCapability: "wellness" },
+      { label: "HEALTH - HRV Summary", webhook: "hrv", forCapability: "wellness", quietUntil: "an athlete's watch records HRV status" },
+      { label: "HEALTH - Sleeps", webhook: "sleeps", forCapability: "wellness", quietUntil: "an athlete wears their watch at night" },
+    ],
+  },
+  capabilities: {
+    activities: { label: "Activities", description: "New activities, as files." },
+    activity_history: { label: "Activity history", description: "Earlier activities, when an athlete connects. Garmin's Starter Access doesn't include it." },
+    wellness: { label: "Wellness", description: "Resting heart rate, sleep, HRV and body composition. Needs Garmin's Health API." },
+    workouts: { label: "Workouts", description: "Planned workouts, sent to the athlete's watch." },
+  },
+  offersSetting: OFFERS_SETTING,
+  verification: {
+    place: "Garmin Connect, with two accounts",
+    why: "Your app works without it. Until it passes, Garmin tells your athletes that your app is unverified.",
+  },
 };
 
 const DAY_SECONDS = 24 * 60 * 60;
@@ -119,6 +152,7 @@ export function garmin(deps: Pick<Deps, "env" | "fetch" | "now">): Provider {
   return {
     name: GARMIN_NAME,
     label: "Garmin Connect",
+    guide: GUIDE,
     requiredSettings: ["GARMIN_CLIENT_ID", "GARMIN_CLIENT_SECRET"],
     webhookKinds: [ACTIVITY_FILES_WEBHOOK, PERMISSIONS_WEBHOOK, DEREGISTRATIONS_WEBHOOK, ...Object.keys(WELLNESS_WEBHOOKS)],
     carriedCapabilities: CARRIED,

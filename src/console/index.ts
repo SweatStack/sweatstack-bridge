@@ -8,7 +8,7 @@ import { isClientSecret, isSession, newSession, SESSION_COOKIE, SESSION_SECONDS 
 import { ConsolePage, NoSecretPage, SignInPage } from "./views";
 
 /**
- * The console, at `/console` (plan 006). It works with any configuration, including none, so it reads each
+ * The console, at `/console`. It works with any configuration, including none, so it reads each
  * setting on its own and never goes through the platform routes' checks.
  */
 

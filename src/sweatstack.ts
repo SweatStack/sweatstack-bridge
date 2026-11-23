@@ -68,6 +68,20 @@ async function clientToken(services: SweatStackServices): Promise<string> {
   return accessToken;
 }
 
+/** What SweatStack says of the app's Client ID and secret: `401` for a wrong one, or a suspended app. */
+export type CredentialsCheck = { accepted: true } | { accepted: false; status: number | null };
+
+/** Whether SweatStack accepts the app's credentials, for the console. A token it gave and that's still cached counts. */
+export async function checkCredentials(services: SweatStackServices): Promise<CredentialsCheck> {
+  try {
+    await clientToken(services);
+    return { accepted: true };
+  } catch (error) {
+    if (error instanceof SweatStackError) return { accepted: false, status: error.status ?? null };
+    throw error;
+  }
+}
+
 /** What a `409` means on every call as the app, and what the owner does about it. */
 const NOT_CONNECTED_FIX = "Set this platform to Self-hosted, with your issuer URL, on your app's Data sources tab in SweatStack.";
 

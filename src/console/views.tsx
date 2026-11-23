@@ -2,8 +2,7 @@ import type { Child } from "hono/jsx";
 import { raw } from "hono/html";
 
 /**
- * The console's pages, rendered on the server. `plans/mockups/console-guide.html` is the source for their
- * layout and copy (plan 006, C13). No inline script or style: the CSP allows only the files under
+ * The console's pages, rendered on the server. No inline script or style: the CSP allows only the files under
  * `public/console/`.
  */
 
@@ -139,7 +138,7 @@ export function SignInPage({ host, failed }: { host: string; failed: boolean }) 
   );
 }
 
-/** Signed in. Plan 006, build step 5, fills it with the steps and the status. */
+/** Signed in. */
 export function ConsolePage({ host }: { host: string }) {
   return (
     <Layout host={host} signedIn={true}>
