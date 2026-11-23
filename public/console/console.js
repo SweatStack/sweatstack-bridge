@@ -29,6 +29,16 @@
       });
     }
 
+    // The walk's start form carries the browser's time zone, for the calendar day of a daily value. Without
+    // it, UTC, which at worst makes a night's step wait for one more day.
+    for (const field of document.querySelectorAll("[data-time-zone]")) {
+      try {
+        field.value = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      } catch {
+        // UTC stays.
+      }
+    }
+
     // Copy buttons, next to a read-only field that holds the value. Without them, the field can be selected.
     for (const button of document.querySelectorAll("[data-copy]")) {
       const field = button.parentElement?.querySelector("input");

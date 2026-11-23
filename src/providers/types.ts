@@ -104,9 +104,51 @@ export interface PlatformGuide {
   readonly capabilities: Readonly<Record<Capability, { readonly label: string; readonly description: string }>>;
   /** The setting that says what the app is approved for. */
   readonly offersSetting: string;
-  /** The platform's own check of the app, if it has one, and the runbook's section that walks through it. */
-  readonly verification?: { readonly place: string; readonly why: string; readonly runbookSection: string };
+  /** The platform's own check of the app, if it has one. */
+  readonly verification?: VerificationGuide;
 }
+
+/**
+ * The platform's check of the app, as a walk the console takes the owner through one step at a time. Each
+ * step says what the owner does, and what the bridge waits to see before it moves on by itself.
+ */
+export interface VerificationGuide {
+  readonly place: string;
+  readonly why: string;
+  /** The runbook's section on it, for the background. */
+  readonly runbookSection: string;
+  /** Where the platform runs its tests. */
+  readonly testsUrl: string;
+  /** How long the platform counts data for: the tests must run within this of the first sign-in. */
+  readonly windowSeconds: number;
+  /** The two accounts the walk uses. */
+  readonly accounts: { readonly a: string; readonly b: string };
+  readonly steps: readonly VerificationStep[];
+}
+
+export interface VerificationStep {
+  readonly id: string;
+  readonly title: string;
+  readonly account?: "a" | "b";
+  /** Only for an app that offers this. */
+  readonly forCapability?: Capability;
+  readonly instructions: readonly string[];
+  readonly link?: { readonly label: string; readonly url: string };
+  readonly proof: VerificationProof;
+}
+
+/** What the bridge waits to see, since the step began. */
+export type VerificationProof =
+  /** The account signed in through a link the walk made. */
+  | { readonly kind: "connected" }
+  /** A job of this kind arrived for the account. */
+  | { readonly kind: "job"; readonly job: "activity_file" | "permissions_change" }
+  /** The account's connection is gone: the platform deregistered it. */
+  | { readonly kind: "removed" }
+  /** Daily values of every one of these measures, for a day from the owner's calendar day this many hours after the step began. */
+  | { readonly kind: "measured"; readonly measures: readonly string[]; readonly fromHours: number }
+  /** The owner says the platform's tests passed: the bridge can't see them. */
+  | { readonly kind: "tests" };
 
 /** One of the platform's notification settings, and the webhook it calls. */
 export interface NotificationSetting {

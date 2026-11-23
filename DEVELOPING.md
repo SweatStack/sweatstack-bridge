@@ -67,7 +67,7 @@ SweatStack's signed disconnect is the third: it comes from the Portal or for a d
 the platform first, answering `503` and keeping the row if the platform can't be reached, so "try again" is true.
 
 **A sign-in without SweatStack**, for a platform's partner verification, which needs two accounts whose data
-reaches the bridge before any athlete can. `npm run verify` writes a flow through the owner's Cloudflare login,
+reaches the bridge before any athlete can. The console's verification walk writes a flow for a signed-in owner,
 and `/start/<platform>/<flow>` sends the browser on to the platform's consent, because only the Worker holds the
 platform's client id. That route leads on only for a flow that exists, isn't used and hasn't expired. The flow's
 relying-party values belong to nobody, so its code can't be redeemed, and SweatStack never names a user for the
@@ -97,7 +97,7 @@ src/
   console/            The owner's console: sign-in, the facts it reads, the steps and status they prove, the pages
 public/console/       The console's stylesheet, script and icon, served as Workers static assets
 migrations/           The D1 schema
-scripts/              The owner's commands: deploy, dev, update, verify. Also the release notes
+scripts/              The owner's commands: deploy, dev, update. Also the release notes
 test/
   contract/           What SweatStack can see, over HTTP only
   internal/           What it can't see: races, retries, budgets
@@ -164,7 +164,9 @@ Core code never names a platform. Everything specific to one lives in `src/provi
 - **It works without JavaScript, and runs no inline script or style.** Every answer is `no-store`, with a CSP
   that allows only `public/console/`, and every `POST` must come from the bridge's own origin.
 - **The platform's words come from its provider's guide** (`PlatformGuide`), so the console renders any
-  platform without naming one.
+  platform without naming one. That includes the platform's verification: its steps, and what the bridge
+  waits to see for each. The walk in `verification.ts` is a pure function of its place, kept in `meta`, and
+  of what the bridge has seen, and the page refreshes itself while it waits.
 
 ## Limits
 

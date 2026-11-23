@@ -5,8 +5,9 @@ them.
 
 ## Unreleased
 
-- **Your bridge has a console**, at its address with `/console` at the end. Sign in with the bridge's SweatStack client secret. It takes you through setup in four steps, one place each: connect your Garmin app, turn on Garmin's notifications, pass Garmin's verification, and switch SweatStack to your bridge. Each step gives the exact values to paste, links straight to the right screen, and ticks itself off when the bridge sees it working: a Garmin sign-in, Garmin's first notification, SweatStack registering. Then it's your status: when Garmin last sent to each URL, how many athletes are connected, failures with their fix, and a newer release. Setting up needs no terminal any more, apart from Garmin's verification.
-- **`npm run status` and `npm run urls` moved to the console.** For this release, they print the console's address.
+- **Your bridge has a console**, at its address with `/console` at the end. Sign in with the bridge's SweatStack client secret. It takes you through setup in four steps, one place each: connect your Garmin app, turn on Garmin's notifications, pass Garmin's verification, and switch SweatStack to your bridge. Each step gives the exact values to paste, links straight to the right screen, and ticks itself off when the bridge sees it working: a Garmin sign-in, Garmin's first notification, SweatStack registering. Then it's your status: when Garmin last sent to each URL, how many athletes are connected, failures with their fix, and a newer release. Setting up needs no terminal any more.
+- **Garmin's verification is a walk in the console**, one step at a time, each moving on by itself once its data reaches the bridge. Close the page whenever you like: it keeps its place. Each account adds an activity by hand in Garmin Connect, which Garmin's tests count, so there's no file to import.
+- **`npm run status`, `npm run urls` and `npm run verify` moved to the console.** For this release, they print where.
 - **The bridge's root page says where the console is.**
 
 ## 0.5.1

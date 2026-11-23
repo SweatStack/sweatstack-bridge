@@ -11,6 +11,7 @@ import {
   type HistoryProgress,
   type PlatformGuide,
   type PlatformTokens,
+  type VerificationStep,
   type Provider,
   type WebhookEvent,
   type WellnessHistoryAsked,
@@ -53,6 +54,33 @@ const WELLNESS_WEBHOOKS: Readonly<Record<string, string>> = {
   hrv: "hrv",
 };
 
+function connectStep(account: "a" | "b"): VerificationStep {
+  const label = account.toUpperCase();
+  return {
+    id: `connect_${account}`,
+    title: "Connect",
+    account,
+    instructions: [
+      `Open a private window, so you're not signed in to Garmin as ${account === "a" ? "anyone else" : "account A"}.`,
+      `Open the link below there, and sign in to Garmin with account ${label}.`,
+      "Allow every permission, then close that window.",
+    ],
+    proof: { kind: "connected" },
+  };
+}
+
+/** An activity entered by hand: Garmin sends it as a file, and its tests count it. */
+function activityStep(account: "a" | "b"): VerificationStep {
+  return {
+    id: `activity_${account}`,
+    title: "Add an activity",
+    account,
+    instructions: [`In Garmin Connect, signed in as account ${account.toUpperCase()}, add a manual activity: a 10-minute walk is enough.`],
+    link: { label: "Garmin Connect", url: "https://connect.garmin.com" },
+    proof: { kind: "job", job: "activity_file" },
+  };
+}
+
 /** What the console tells the owner, in the words of Garmin's developer portal and endpoint configuration. */
 const GUIDE: PlatformGuide = {
   name: "Garmin",
@@ -83,6 +111,62 @@ const GUIDE: PlatformGuide = {
     place: "Garmin Connect, with two accounts",
     why: "Your app works without it. Until it passes, Garmin tells your athletes that your app is unverified.",
     runbookSection: "pass-garmins-verification",
+    testsUrl: "https://apis.garmin.com/tools/partnerVerification",
+    windowSeconds: 24 * 60 * 60,
+    accounts: {
+      a: "Your own Garmin account. If your app offers wellness, it needs a Garmin watch that records sleep and HRV status.",
+      b: "A new Garmin account. Make it at connect.garmin.com: it's free and needs no watch.",
+    },
+    steps: [
+      connectStep("a"),
+      activityStep("a"),
+      connectStep("b"),
+      activityStep("b"),
+      {
+        id: "permission_b",
+        title: "Turn a permission off",
+        account: "b",
+        instructions: ["In Garmin Connect, signed in as account B, turn off one of your app's permissions."],
+        link: { label: "Garmin Connect", url: "https://connect.garmin.com" },
+        proof: { kind: "job", job: "permissions_change" },
+      },
+      {
+        id: "remove_b",
+        title: "Remove your app",
+        account: "b",
+        instructions: ["In Garmin Connect, signed in as account B, remove your app from the connected apps."],
+        link: { label: "Garmin Connect", url: "https://connect.garmin.com" },
+        proof: { kind: "removed" },
+      },
+      {
+        id: "weight_a",
+        title: "Enter a weight",
+        account: "a",
+        forCapability: "wellness",
+        instructions: ["In Garmin Connect, signed in as account A, enter a weight for today."],
+        link: { label: "Garmin Connect", url: "https://connect.garmin.com" },
+        proof: { kind: "measured", measures: ["body_mass"], fromHours: 0 },
+      },
+      {
+        id: "night_a",
+        title: "Wear the watch tonight",
+        account: "a",
+        forCapability: "wellness",
+        instructions: [
+          "Wear the watch of account A tonight.",
+          "Tomorrow morning, sync it with the Garmin Connect app. You can close this page meanwhile: the walk keeps its place.",
+        ],
+        // Tonight's sleep is dated tomorrow, or today for a start after midnight. A night sent as history is older.
+        proof: { kind: "measured", measures: ["sleep_duration", "hrv"], fromHours: 6 },
+      },
+      {
+        id: "tests",
+        title: "Run Garmin's tests",
+        instructions: ["Open Garmin's partner verification, sign in with your consumer key and secret, and select Run Tests."],
+        link: { label: "Garmin's partner verification", url: "https://apis.garmin.com/tools/partnerVerification" },
+        proof: { kind: "tests" },
+      },
+    ],
   },
 };
 

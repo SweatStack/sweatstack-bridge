@@ -1,11 +1,12 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
-import { RUNBOOK_SECTION, verificationSignIn } from "../../scripts/lib/verify.mjs";
+import { startSignIn } from "../../src/console/verification";
+import { Database } from "../../src/db";
 import type { Account } from "../fakes/garmin";
 import { ORIGIN, PROVIDER, pathOf, resetDatabase, world } from "../support/world";
 
 /**
- * A sign-in that `npm run verify` starts for Garmin's partner verification: no SweatStack in front of it,
+ * A sign-in that the console's verification walk starts for Garmin's partner verification: no SweatStack in front of it,
  * and no user ever named. Everything after the link is what the bridge does for any connection that
  * nobody claims, pinned down here for this use (RUNBOOK.md, Pass Garmin's verification).
  */
@@ -25,12 +26,11 @@ const setUp = async (options: Parameters<typeof world>[0]) => {
   w = world(options);
 };
 
-/** What `npm run verify` does: the row through the owner's Cloudflare login, and the link it prints. */
-const verificationLink = async () => {
-  const signIn = verificationSignIn({ now: w.clock.now });
-  await env.DB.prepare(signIn.sql).run();
-  return signIn;
-};
+/** Where the private window lands after Garmin's consent. */
+const LANDING = `${ORIGIN}/console/verification/connected`;
+
+/** What the walk does for "Get a sign-in link": the row, and the link it shows. */
+const verificationLink = () => startSignIn(new Database(env.DB), PROVIDER, LANDING, w.clock.now);
 
 /** The owner opening the link and allowing everything at Garmin. Returns where the browser lands. */
 const connect = async (account: Account) => {
@@ -66,19 +66,19 @@ describe("a sign-in for Garmin's verification", () => {
     expect(garmin.searchParams.get("redirect_uri")).toBe(`${ORIGIN}/callback/${PROVIDER}`);
   });
 
-  it("lands on the runbook's section after Garmin's consent", async () => {
+  it("lands on the walk's landing page after Garmin's consent", async () => {
     const landing = await connect(kari);
-    expect(landing.origin + landing.pathname + landing.hash).toBe(RUNBOOK_SECTION);
+    expect(landing.origin + landing.pathname).toBe(LANDING);
     expect(landing.searchParams.get("error")).toBeNull();
     expect(await connectionRows()).toHaveLength(1);
   });
 
-  it("lands on the runbook's section with the error when the owner refuses at Garmin", async () => {
+  it("lands there with the error when the owner refuses at Garmin", async () => {
     const { path } = await verificationLink();
     const started = await w.request(path);
     const back = await w.request(pathOf(w.garmin.deny(started.headers.get("Location") as string)));
     const landing = new URL(back.headers.get("Location") as string);
-    expect(landing.origin + landing.pathname + landing.hash).toBe(RUNBOOK_SECTION);
+    expect(landing.origin + landing.pathname).toBe(LANDING);
     expect(landing.searchParams.get("error")).toBe("access_denied");
     expect(await connectionRows()).toEqual([]);
   });
@@ -98,7 +98,7 @@ describe("a sign-in for Garmin's verification", () => {
     w.clock.now += HOUR;
     const expired = await w.request(path);
     expect(expired.status).toBe(400);
-    expect(await expired.text()).toMatch(/npm run verify/);
+    expect(await expired.text()).toMatch(/verification walk/);
   });
 
   it("refuses a link the bridge never made", async () => {
@@ -143,7 +143,7 @@ describe("a Garmin account connected for the verification", () => {
     await setUp(AFTER_THE_SWITCH);
     const client = await w.register();
     const landing = await connect(kari);
-    const response = await w.exchange(client, { code: landing.searchParams.get("code") as string, redirect_uri: RUNBOOK_SECTION, code_verifier: "a".repeat(43) });
+    const response = await w.exchange(client, { code: landing.searchParams.get("code") as string, redirect_uri: LANDING, code_verifier: "a".repeat(43) });
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ error: "invalid_grant" });
   });

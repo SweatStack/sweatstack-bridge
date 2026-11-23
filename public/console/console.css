@@ -179,3 +179,8 @@ footer { text-align: center; color: var(--muted); font-size: 13px; padding: 0 va
 .tile dd.time { font-size: 18px; line-height: 1.35; }
 .step-body > div > .hint { margin-top: 6px; }
 .proof-line { display: block; line-height: 1.4; }
+.now-card > * + * { margin-top: var(--s4); }
+.now-card > .of + h2 { margin-top: var(--s2); }
+.accounts { list-style: none; padding: 0; display: grid; gap: var(--s3); }
+.accounts li { display: grid; grid-template-columns: auto 1fr; gap: var(--s3); align-items: start; }
+.accounts .account { align-self: start; }

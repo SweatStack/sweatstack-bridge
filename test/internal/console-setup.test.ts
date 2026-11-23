@@ -44,6 +44,7 @@ function factsWith({
     settingProblems: [],
     sweatstack: { url: "https://app.sweatstack.no", clientId: "app-1" },
     credentials: { accepted: true },
+    walk: null,
     ...top,
     platform: {
       name: provider.name,

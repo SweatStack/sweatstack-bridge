@@ -116,6 +116,17 @@ export interface Activity {
   signingKey: boolean;
 }
 
+/**
+ * What the verification walk waits on, for its accounts: which are connected, the jobs that came for them,
+ * and its sign-in under way. Of a daily value, only which measure and which day.
+ */
+export interface WalkProgress {
+  connected: Set<string>;
+  jobs: { sub: string; kind: string; at: number; measures: { measure: string; date: string }[] }[];
+  /** The walk's sign-in: null once its row is gone, with `sub` once the platform's consent completed. */
+  flow: { sub: string | null } | null;
+}
+
 /** The next run carries on, so a day when everyone is due can't become one enormous statement. */
 const MAX_DUE_PER_RUN = 100;
 
@@ -193,6 +204,40 @@ export class Database {
       ...first<Pick<Activity, "lastFile" | "lastWellness">>(last),
       signingKey: first<{ count: number }>(signingKey).count > 0,
     };
+  }
+
+  async walkProgress(subs: readonly string[], flowId: string | null): Promise<WalkProgress> {
+    const list = JSON.stringify(subs);
+    const [connections, jobs, flow] = await this.d1.batch([
+      this.d1.prepare("SELECT sub FROM connections WHERE sub IN (SELECT value FROM json_each(?))").bind(list),
+      this.d1
+        .prepare(
+          `SELECT sub, kind, received_at AS at, CASE WHEN kind = 'wellness' THEN payload END AS payload FROM inbox
+           WHERE sub IN (SELECT value FROM json_each(?)) AND kind IN ('activity_file', 'wellness', 'permissions_change')`,
+        )
+        .bind(list),
+      this.d1.prepare("SELECT sub FROM flows WHERE id = ?").bind(flowId ?? ""),
+    ]);
+    const measures = (payload: string | null) => {
+      try {
+        return (JSON.parse(payload ?? "[]") as { measure: string; date: string }[]).map(({ measure, date }) => ({ measure, date }));
+      } catch {
+        return [];
+      }
+    };
+    const flowRow = (flow?.results[0] ?? null) as { sub: string | null } | null;
+    return {
+      connected: new Set(((connections?.results ?? []) as { sub: string }[]).map((row) => row.sub)),
+      jobs: ((jobs?.results ?? []) as { sub: string; kind: string; at: number; payload: string | null }[]).map(({ payload, ...job }) => ({
+        ...job,
+        measures: measures(payload),
+      })),
+      flow: flowRow === null ? null : { sub: flowRow.sub },
+    };
+  }
+
+  async deleteMeta(key: string): Promise<void> {
+    await this.d1.prepare("DELETE FROM meta WHERE key = ?").bind(key).run();
   }
 
   client(provider: string): Promise<ClientRow | null> {

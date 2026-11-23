@@ -6,6 +6,7 @@ import { allProviders } from "../providers";
 import type { Capability, PlatformGuide, Provider } from "../providers/types";
 import { checkCredentials, type CredentialsCheck } from "../sweatstack";
 import { latestRelease } from "./releases";
+import { loadWalk, walkSteps, type Walk } from "./verification";
 
 /**
  * Every fact the console shows, read in one place. The pages are pure functions of these.
@@ -26,6 +27,8 @@ export interface Facts {
   credentials: CredentialsCheck | null;
   platform: PlatformFacts;
   activity: Activity;
+  /** The verification walk, if the platform has one and the owner started it, with where it is. */
+  walk: { saved: Walk; number: number; of: number } | null;
 }
 
 export interface PlatformFacts {
@@ -61,14 +64,16 @@ export async function gatherFacts(deps: Deps, origin: string): Promise<Facts> {
   const sweatstackOnly = readConfig(deps.env, { requiredSettings: [] });
   const clientId = setting(deps.env, "SWEATSTACK_CLIENT_ID") ?? setting(deps.env, "SWEATSTACK_APP_ID");
 
-  const [credentials, release, seen, client, webhookSecret, activity] = await Promise.all([
+  const [credentials, release, seen, client, webhookSecret, activity, saved] = await Promise.all([
     sweatstackOnly.ok ? checkCredentials({ config: sweatstackOnly.config, db, deps }) : null,
     latestRelease(db, deps),
     db.seen(),
     db.client(provider.name),
     db.meta("webhook_secret"),
     db.activity(provider.name),
+    loadWalk(db),
   ]);
+  const steps = provider.guide.verification === undefined ? [] : walkSteps(provider.guide.verification, provider.offeredCapabilities());
 
   const pushPrefix = SEEN.push(provider.name, "");
   return {
@@ -90,5 +95,6 @@ export async function gatherFacts(deps: Deps, origin: string): Promise<Facts> {
       registeredAt: client?.registered_at ?? null,
     },
     activity,
+    walk: saved === null || steps.length === 0 ? null : { saved, number: steps.findIndex((step) => step.id === saved.step) + 1, of: steps.length },
   };
 }

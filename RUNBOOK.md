@@ -207,14 +207,11 @@ is never stored.
 Your app works without this verification. Until it passes, Garmin shows your athletes that your app is unverified.
 
 Garmin's [partner verification](https://apis.garmin.com/tools/partnerVerification) checks that your bridge gets
-data from two Garmin users. You can pass it before you set Garmin to Self-hosted in SweatStack: `npm run verify`
-connects two Garmin accounts of your own to the bridge, with no SweatStack in between. Nothing has to change after
-it passes.
+data from two Garmin users. You can pass it before you set Garmin to Self-hosted in SweatStack: the walk connects
+two Garmin accounts of your own to the bridge, with no SweatStack in between. Nothing has to change after it passes.
 
-Run `npm run verify` in your copy. It walks you through the steps below one at a time, and goes on once a step's
-data has reached the bridge. Type q to stop at any step, and run it again to carry on there. It's the one step
-that still needs a terminal: clone the copy that Cloudflare made in your GitHub account, then, in that folder,
-run `npm ci` and, once on this computer, `npx wrangler login`.
+Start it from step 3 of your bridge's console. It shows one step at a time, and moves on by itself once a step's
+data has reached the bridge. Close the page whenever you like: it keeps its place.
 
 You need:
 
@@ -223,39 +220,38 @@ You need:
 - **Account B:** a new Garmin account. Make it at https://connect.garmin.com. It is free and needs no watch.
 - **About 15 minutes.** With wellness, one night more, because Garmin must receive sleep and HRV status.
 
-1. [Set up Garmin's notifications](#set-up-garmins-notifications), and the health settings under
-   [Wellness](#wellness) if your app offers it.
-2. Open the link that `npm run verify` prints in a private browser window. Sign in to Garmin with account A, and
-   allow all permissions. You come back to this page.
-3. With account A, import the walk that `npm run verify` made, at https://connect.garmin.com/app/import-data.
-4. Connect account B with the new link that `npm run verify` prints.
-5. With account B, import the new walk.
-6. With account B, turn off one of your app's permissions in Garmin Connect.
-7. With account B, remove your app in Garmin Connect.
-8. Only with wellness: with account A, enter a weight in Garmin Connect.
-9. Only with wellness: wear the watch tonight. Tomorrow morning, sync it with the Garmin Connect app.
-10. Open Garmin's [partner verification](https://apis.garmin.com/tools/partnerVerification), sign in with your
-    consumer key, and select **Run Tests**. Do it within 24 hours of step 2, because Garmin counts the last 24 hours.
-    Without wellness, this is step 8 in `npm run verify`.
+First, [set up Garmin's notifications](#set-up-garmins-notifications), and the health settings under
+[Wellness](#wellness) if your app offers it: each step waits for one of them. Then the walk's steps:
+
+1. Open the walk's sign-in link in a private browser window. Sign in to Garmin with account A, and allow all
+   permissions.
+2. With account A, add a manual activity in Garmin Connect. Garmin sends it as a file, and its tests count it.
+3. Connect account B with a new link, as in step 1.
+4. With account B, add a manual activity.
+5. With account B, turn off one of your app's permissions in Garmin Connect.
+6. With account B, remove your app in Garmin Connect.
+7. Only with wellness: with account A, enter a weight in Garmin Connect.
+8. Only with wellness: wear the watch tonight. Tomorrow morning, sync it with the Garmin Connect app.
+9. Open Garmin's [partner verification](https://apis.garmin.com/tools/partnerVerification), sign in with your
+   consumer key, and select **Run Tests**. Do it within 24 hours of step 1, because Garmin counts the last 24 hours.
+   Without wellness, this is step 7 of the walk.
 
 You can run Garmin's tests at any time: a setting without data shows which step is still missing.
 
 - **The bridge ends each of these connections a day after its consent**, at Garmin too, because no SweatStack user
-  claims it. `npm run verify` then starts again at step 2 by itself.
-- **If you come back to this page with `error=` in the address**, Garmin didn't connect the account.
-  `npm run verify` prints a new link. If Garmin shows an error page instead, type n for a new link.
-- **If account A is already connected to your app**, the sign-in reconnects it, and the walk arrives as your
-  activity.
+  claims it. The walk then starts again at step 1 by itself.
+- **If Garmin doesn't connect the account**, the walk says so. Get a new link there and try again.
+- **If account A is already connected to your app**, the sign-in reconnects it, and its activity arrives as yours.
 - **Until you set Garmin to Self-hosted**, the console counts these accounts as waiting for SweatStack and
-  shows a `declare` failure, `sweatstack_409`. In `npx wrangler tail`, the bridge warns `sweatstack_not_connected` and
+  shows a `declare` failure, `sweatstack_409`. In the Worker's logs, the bridge warns `sweatstack_not_connected` and
   `push_waiting_for_user`. All of that is expected here.
 
 | Garmin's test | What passes it |
 |---|---|
-| "A deregistration endpoint, a user permissions change endpoint, and at least 1 other endpoint must be enabled." | Step 1 |
-| "N enabled summary domain(s) without data in the last 24 hours." | Each setting you enabled gets data from a step, by the name Garmin's test shows: `ACTIVITY_FILE_DATA` from steps 3 and 5, `CONSUMER_PERMISSIONS` from step 6, `USER_DEREG` from step 7, `WELLNESS_BODY_COMP` from step 8, `WELLNESS_DAILY`, `WELLNESS_SLEEP` and `HRV` from step 9 |
-| "N user(s) with data uploaded in the last 24 hours. 2 required." | Steps 3 and 5 |
-| "N http error(s) in the last 24 hours." | The bridge answered every push. If it refused one, `npx wrangler tail` shows `webhook_refused` with the reason. `unknown_secret`: paste the URLs from the console again. `unknown_kind`: disable that setting at Garmin. `invalid_body`: report it. Garmin counts an error for 24 hours |
+| "A deregistration endpoint, a user permissions change endpoint, and at least 1 other endpoint must be enabled." | Garmin's notifications, step 2 of the console |
+| "N enabled summary domain(s) without data in the last 24 hours." | Each setting you enabled gets data from a step, by the name Garmin's test shows: `ACTIVITY_FILE_DATA` from steps 2 and 4, `CONSUMER_PERMISSIONS` from step 5, `USER_DEREG` from step 6, `WELLNESS_BODY_COMP` from step 7, `WELLNESS_DAILY`, `WELLNESS_SLEEP` and `HRV` from step 8 |
+| "N user(s) with data uploaded in the last 24 hours. 2 required." | Steps 2 and 4 |
+| "N http error(s) in the last 24 hours." | The bridge answered every push. If it refused one, the Worker's logs in Cloudflare, or `npx wrangler tail`, show `webhook_refused` with the reason. `unknown_secret`: paste the URLs from the console again. `unknown_kind`: disable that setting at Garmin. `invalid_body`: report it. Garmin counts an error for 24 hours |
 
 ## Fix a missing Disconnect button
 

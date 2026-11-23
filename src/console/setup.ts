@@ -14,7 +14,7 @@ export type Proof = { at: number } | null;
 export interface Setup {
   app: Proof;
   notifications: Proof;
-  /** The platform's own check, which the bridge can't see yet. */
+  /** The walk through the platform's own check, once the owner says its tests passed. */
   verification: Proof;
   sweatstack: Proof;
   /** The steps left among the three that count: the verification is optional. */
@@ -29,7 +29,7 @@ export function setup(facts: Facts): Setup {
   return {
     app,
     notifications,
-    verification: null,
+    verification: facts.walk?.saved.finishedAt === undefined ? null : { at: facts.walk.saved.finishedAt },
     sweatstack,
     left: [app, notifications, sweatstack].filter((proof) => proof === null).length,
   };
